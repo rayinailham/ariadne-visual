@@ -7,9 +7,24 @@
 
 import type { Angka, Bersumber, Butir } from './tipe'
 
+export const labelKorpus = {
+  judulVisual: 'Korpus → baris → vektor → HNSW',
+  akarKnowledge: 'analysis-worker/knowledge/',
+  manifest: 'manifest.json',
+  tabel: 'reference_documents',
+  bukaBaris: 'Buka baris contoh',
+  tutupBaris: 'Tutup baris contoh',
+  anatomiBaris: 'Anatomi satu baris korpus',
+  nilaiTakDipublikasikan: 'Nilai elemen vektor tidak dipublikasikan',
+  kandidatKonstruksi: 'kandidat saat konstruksi',
+  tetanggaTersimpan: 'tetangga tersimpan per simpul',
+  sumber: 'rencana/08-PLAN-WEB-VISUAL.md:160, ecosystem-futureguide/migrations/014_pgvector_embeddings.up.sql:44',
+}
+
 export interface KelompokKorpus extends Bersumber {
   id: string
   nama: string
+  direktori: string
   jumlahBerkas: number
   jumlahUnit: number
   fokus: string
@@ -19,6 +34,7 @@ export const kelompokKorpus: KelompokKorpus[] = [
   {
     id: 'riasec',
     nama: 'RIASEC',
+    direktori: 'riasec',
     jumlahBerkas: 4,
     jumlahUnit: 28,
     fokus: 'Teori Holland, validitas minat, konteks remaja dan Asia.',
@@ -27,6 +43,7 @@ export const kelompokKorpus: KelompokKorpus[] = [
   {
     id: 'ocean',
     nama: 'OCEAN',
+    direktori: 'ocean',
     jumlahBerkas: 4,
     jumlahUnit: 27,
     fokus: 'Fondasi Big Five, luaran karier, facet dan remaja.',
@@ -35,6 +52,7 @@ export const kelompokKorpus: KelompokKorpus[] = [
   {
     id: 'via_is',
     nama: 'VIA-IS',
+    direktori: 'via-is',
     jumlahBerkas: 4,
     jumlahUnit: 28,
     fokus: 'Klasifikasi 24 kekuatan, kesejahteraan, konteks pelajar.',
@@ -43,6 +61,7 @@ export const kelompokKorpus: KelompokKorpus[] = [
   {
     id: 'cross',
     nama: 'Cross',
+    direktori: 'cross-reference',
     jumlahBerkas: 5,
     jumlahUnit: 44,
     fokus: 'Integrasi lintas-instrumen, adaptabilitas karier, PMAI.',
@@ -100,9 +119,15 @@ export interface ContohBarisKorpus extends Bersumber {
   assessmentType: string
   domain: string
   title: string
+  content: string
   source: string
+  tags: string[]
+  checksum: string
   originFile: string
   embeddingModel: string
+  embeddingStatus: string
+  sourceIdentity: string
+  createdAt: string | null
   /** Dimensi vektor; nilainya sendiri tidak dipublikasikan. */
   dimensiVektor: number
   /** Selalu `null`: artefak tidak memuat nilai vektor. */
@@ -111,20 +136,54 @@ export interface ContohBarisKorpus extends Bersumber {
 }
 
 export const contohBarisKorpus: ContohBarisKorpus = {
-  id: 'unit:2dde45309d4378673b6241ecfa4b4a893d0dd6b7c2d2e85b1813d99a79e368e8',
+  id: 'dabb42bd-0cd8-4754-8490-659f12bf66fa',
   assessmentType: 'cross',
   domain: 'Innocent',
   title: 'Archetype 1 — The Innocent: Profile Pattern and Score Indicators',
+  content:
+    'The Innocent archetype represents trust, optimism, faith, and the desire to experience life as fundamentally good. Core motivation: to be safe and to belong without compromise. In multi-assessment terms, the Innocent profile typically shows: OCEAN — high Agreeableness, low Neuroticism, moderate Openness; RIASEC — moderate Social, low Realistic; VIA-IS — high Hope, Spirituality, Gratitude, and Forgiveness. The shadow expression is denial of complexity or naive avoidance of conflict. Career resonance: roles emphasizing service, faith-based work, child education, hospitality, and wellness coaching. The Innocent is the appropriate archetype label when the profile combines high Hope and Gratitude (VIA, top quartile), low Neuroticism (OCEAN, below 30), and moderate-to-high Agreeableness without strong Enterprising or Investigative dominance. In Indonesian narrative framing, this archetype is rendered as "Sang Pemurni" or "Sang Optimis Tulus."',
   source:
-    'Pearson, C. S. (1991). Awakening the heroes within: Twelve archetypes to help us find ourselves and transform our world.',
+    'Pearson, C. S. (1991). Awakening the heroes within: Twelve archetypes to help us find ourselves and transform our world. HarperOne. (PMAI archetype: Innocent)',
+  tags: ['Innocent', 'OCEAN', 'PMAI', 'VIA', 'career', 'cross'],
+  checksum: '38fd3e9be6465e02cd90377a3c759239df9cbd1131a2cdc45d9f1537fcd3185a',
   originFile: 'cross-reference/pmai-archetypes.txt',
   embeddingModel: 'gemini-embedding-001',
+  embeddingStatus: 'manifest: missing · basis data evaluasi: ready',
+  sourceIdentity: 'citation:afce659c4e2538a0011f3038039518132ba18228b55947da1d0819971041bd15',
+  createdAt: null,
   dimensiVektor: 768,
   potonganVektor: null,
   catatanVektor:
     'Artefak evaluasi tidak memuat nilai vektor mana pun. Yang terverifikasi hanya dimensinya 768 dan norma 1,000000 pada sampel yang diperiksa.',
-  sumber: 'ecosystem-futureguide/analysis-worker/knowledge/manifest.json',
+  sumber:
+    'ecosystem-futureguide/analysis-worker/knowledge/manifest.json + knowledge/cross-reference/pmai-archetypes.txt:11 + bab4-results/14-reference-exposure/api-response-sample.json:277',
 }
+
+export interface NilaiKolomContoh extends KolomTabel {
+  nilai: string
+}
+
+/** Seluruh kolom anatomi tabel dipasangkan ke satu baris yang dapat dibuka penonton. */
+export const nilaiKolomContoh: NilaiKolomContoh[] = kolomReferenceDocuments.map((kolom) => {
+  const nilai: Record<string, string> = {
+    id: contohBarisKorpus.id,
+    assessment_type: contohBarisKorpus.assessmentType,
+    domain: contohBarisKorpus.domain,
+    title: contohBarisKorpus.title,
+    content: contohBarisKorpus.content,
+    embedding: `null — ${contohBarisKorpus.catatanVektor}`,
+    source: contohBarisKorpus.source,
+    tags: `[${contohBarisKorpus.tags.join(', ')}]`,
+    checksum: contohBarisKorpus.checksum,
+    embedding_model: contohBarisKorpus.embeddingModel,
+    embedding_status: contohBarisKorpus.embeddingStatus,
+    source_identity: contohBarisKorpus.sourceIdentity,
+    origin_file: contohBarisKorpus.originFile,
+    created_at: contohBarisKorpus.createdAt ?? 'null — waktu penyisipan baris contoh tidak dipublikasikan',
+  }
+
+  return { ...kolom, nilai: nilai[kolom.nama] ?? 'null — tidak dipublikasikan pada artefak evaluasi' }
+})
 
 export interface ParameterIndeks extends Bersumber {
   nama: string

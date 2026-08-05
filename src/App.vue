@@ -4,6 +4,7 @@ import SceneMasalah from '@/scenes/SceneMasalah.vue'
 import SceneInstrumen from '@/scenes/SceneInstrumen.vue'
 import SceneArsitektur from '@/scenes/SceneArsitektur.vue'
 import SceneKeandalan from '@/scenes/SceneKeandalan.vue'
+import SceneKorpus from '@/scenes/SceneKorpus.vue'
 import { useTema } from '@/composables/useTema'
 import type { RingkasanAdegan } from '@/composables/adegan'
 import { angkaTanpaNilai, semuaAngka } from '@/data'
@@ -23,6 +24,7 @@ const adegan: RingkasanAdegan[] = [
   { id: 'S02', kode: 'S02', judul: 'Instrumen' },
   { id: 'S03', kode: 'S03', judul: 'Arsitektur' },
   { id: 'S04', kode: 'S04', judul: 'Keandalan' },
+  { id: 'S05', kode: 'S05', judul: 'Korpus RAG' },
 ]
 </script>
 
@@ -72,6 +74,7 @@ const adegan: RingkasanAdegan[] = [
     <SceneInstrumen />
     <SceneArsitektur />
     <SceneKeandalan />
+    <SceneKorpus />
   </main>
 
   <footer

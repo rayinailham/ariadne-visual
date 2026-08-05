@@ -1,0 +1,169 @@
+@import 'tailwindcss';
+
+/* ==========================================================================
+   Token sistem desain "Ariadne"
+   Arah rasa: instrumen ukur laboratorium yang dicetak di atas naskah ilmiah.
+   Latar tinta hangat, satu warna sorot (ambar), garis rambut, penomoran eksplisit.
+   Warna semantik (benar/awas/salah) hanya untuk keadaan sistem, bukan hiasan.
+   ========================================================================== */
+
+@theme {
+  /* ---------- keluarga huruf ---------- */
+  --font-naskah: 'Source Serif 4 Variable', ui-serif, Georgia, 'Times New Roman', serif;
+  --font-antarmuka: 'Instrument Sans Variable', ui-sans-serif, system-ui, sans-serif;
+  --font-teknis: 'JetBrains Mono Variable', ui-monospace, 'SFMono-Regular', Menlo, monospace;
+
+  /* ---------- palet mentah ---------- */
+  --color-tinta-950: #0e0c09;
+  --color-tinta-900: #151209;
+  --color-tinta-850: #1a170f;
+  --color-tinta-800: #221d13;
+  --color-tinta-700: #2e2718;
+  --color-tinta-600: #3d3421;
+
+  --color-kertas-50: #faf9f5;
+  --color-kertas-100: #f2f1eb;
+  --color-kertas-200: #e4e2d8;
+  --color-kertas-300: #cfccbe;
+  --color-kertas-400: #a8a391;
+  --color-kertas-500: #7d7869;
+  --color-kertas-600: #5c5749;
+
+  --color-sorot-300: #f0c079;
+  --color-sorot-400: #e5a445;
+  --color-sorot-500: #cf8a22;
+  --color-sorot-600: #a2681a;
+  --color-sorot-700: #7a4e14;
+  --color-sorot-800: #5c390d;
+
+  --color-benar-400: #7fb08a;
+  --color-benar-600: #47714f;
+  --color-awas-400: #d3b455;
+  --color-awas-600: #8a7226;
+  --color-salah-400: #d0796a;
+  --color-salah-600: #93412f;
+
+  /* ---------- warna semantik: nilai bawaan = tema gelap ---------- */
+  --color-latar: var(--color-tinta-900);
+  --color-latar-dalam: var(--color-tinta-950);
+  --color-panel: var(--color-tinta-850);
+  --color-panel-naik: var(--color-tinta-800);
+  --color-garis: #2b2417;
+  --color-garis-tegas: #453a24;
+  --color-teks: #f2ece0;
+  --color-teks-redup: #b9ae97;
+  --color-teks-samar: #8b8069;
+  --color-sorot: var(--color-sorot-400);
+  --color-sorot-pekat: var(--color-sorot-300);
+  --color-benar: var(--color-benar-400);
+  --color-awas: var(--color-awas-400);
+  --color-salah: var(--color-salah-400);
+
+  /* ---------- skala tipografi ---------- */
+  --text-eyebrow: 0.6875rem;
+  --text-eyebrow--line-height: 1.2;
+  --text-eyebrow--letter-spacing: 0.14em;
+
+  --text-mikro: 0.75rem;
+  --text-mikro--line-height: 1.45;
+
+  --text-kecil: 0.875rem;
+  --text-kecil--line-height: 1.55;
+
+  --text-badan: clamp(1.0625rem, 1rem + 0.28vw, 1.1875rem);
+  --text-badan--line-height: 1.72;
+
+  --text-sorotan: clamp(1.25rem, 1.15rem + 0.5vw, 1.5rem);
+  --text-sorotan--line-height: 1.5;
+
+  --text-j3: clamp(1.375rem, 1.25rem + 0.6vw, 1.625rem);
+  --text-j3--line-height: 1.32;
+  --text-j3--letter-spacing: -0.01em;
+
+  --text-j2: clamp(1.75rem, 1.5rem + 1.1vw, 2.25rem);
+  --text-j2--line-height: 1.2;
+  --text-j2--letter-spacing: -0.018em;
+
+  --text-j1: clamp(2.25rem, 1.8rem + 2.2vw, 3.5rem);
+  --text-j1--line-height: 1.08;
+  --text-j1--letter-spacing: -0.026em;
+
+  /* ---------- spasi & bentuk ---------- */
+  --radius-hairline: 2px;
+  --radius-kartu: 10px;
+  --radius-panel: 14px;
+
+  /* ---------- easing ---------- */
+  --ease-keluar: cubic-bezier(0.22, 0.61, 0.36, 1);
+  --ease-masuk: cubic-bezier(0.55, 0, 1, 0.45);
+  --ease-halus: cubic-bezier(0.65, 0, 0.35, 1);
+}
+
+/* ==========================================================================
+   Tema
+   Bawaan: gelap. Ikut selera sistem bila atribut data-tema tidak dipasang.
+   ========================================================================== */
+
+:root {
+  color-scheme: dark;
+
+  /* ukuran tata letak yang dipakai lintas komponen */
+  --tinggi-kepala: 3.5rem;
+  --lebar-rel: 13.5rem;
+  --napas-adegan: clamp(4rem, 9vh, 7rem);
+  /* Ruang yang disisihkan untuk rel adegan; nol selama rel belum tampil. */
+  --sisipan-rel: 0rem;
+
+  --durasi-cepat: 140ms;
+  --durasi-sedang: 320ms;
+  --durasi-lambat: 620ms;
+}
+
+@media (prefers-color-scheme: light) {
+  :root:not([data-tema='gelap']) {
+    color-scheme: light;
+    --color-latar: var(--color-kertas-100);
+    --color-latar-dalam: var(--color-kertas-50);
+    --color-panel: var(--color-kertas-50);
+    --color-panel-naik: #ffffff;
+    --color-garis: var(--color-kertas-200);
+    --color-garis-tegas: var(--color-kertas-300);
+    --color-teks: #1b1710;
+    --color-teks-redup: #574e3d;
+    --color-teks-samar: var(--color-kertas-600);
+    --color-sorot: var(--color-sorot-700);
+    --color-sorot-pekat: var(--color-sorot-800);
+    --color-benar: var(--color-benar-600);
+    --color-awas: var(--color-awas-600);
+    --color-salah: var(--color-salah-600);
+  }
+}
+
+:root[data-tema='terang'] {
+  color-scheme: light;
+  --color-latar: var(--color-kertas-100);
+  --color-latar-dalam: var(--color-kertas-50);
+  --color-panel: var(--color-kertas-50);
+  --color-panel-naik: #ffffff;
+  --color-garis: var(--color-kertas-200);
+  --color-garis-tegas: var(--color-kertas-300);
+  --color-teks: #1b1710;
+  --color-teks-redup: #574e3d;
+  --color-teks-samar: var(--color-kertas-600);
+  --color-sorot: var(--color-sorot-700);
+  --color-sorot-pekat: var(--color-sorot-800);
+  --color-benar: var(--color-benar-600);
+  --color-awas: var(--color-awas-600);
+  --color-salah: var(--color-salah-600);
+}
+
+:root[data-tema='gelap'] {
+  color-scheme: dark;
+}
+
+/* Rel adegan baru tampil mulai 1280 px; sejak itu isi digeser agar tidak tertimpa. */
+@media (min-width: 1280px) {
+  :root {
+    --sisipan-rel: calc(var(--lebar-rel) + 3rem);
+  }
+}

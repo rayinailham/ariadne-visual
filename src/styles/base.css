@@ -1,0 +1,137 @@
+/* ==========================================================================
+   Lapisan dasar: perilaku dokumen, keterbacaan naskah, fokus papan tik.
+   Tidak ada gaya khusus adegan di berkas ini.
+   ========================================================================== */
+
+@layer base {
+  * {
+    box-sizing: border-box;
+  }
+
+  html {
+    scroll-behavior: smooth;
+    -webkit-text-size-adjust: 100%;
+  }
+
+  body {
+    margin: 0;
+    padding-left: var(--sisipan-rel);
+    background-color: var(--color-latar);
+    color: var(--color-teks);
+    font-family: var(--font-naskah);
+    font-size: var(--text-badan);
+    line-height: 1.72;
+    font-variant-numeric: tabular-nums;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+
+  h1,
+  h2,
+  h3,
+  h4 {
+    font-family: var(--font-antarmuka);
+    font-weight: 560;
+    margin: 0;
+    text-wrap: balance;
+  }
+
+  p {
+    margin: 0;
+    text-wrap: pretty;
+  }
+
+  em {
+    font-style: italic;
+  }
+
+  strong {
+    font-weight: 620;
+    color: var(--color-teks);
+  }
+
+  code,
+  kbd,
+  samp {
+    font-family: var(--font-teknis);
+    font-size: 0.86em;
+    font-variant-ligatures: none;
+  }
+
+  a {
+    color: inherit;
+    text-decoration-color: var(--color-sorot);
+    text-underline-offset: 0.18em;
+  }
+
+  button {
+    font: inherit;
+    color: inherit;
+    background: none;
+    border: 0;
+    cursor: pointer;
+  }
+
+  svg text {
+    font-family: var(--font-teknis);
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--color-sorot);
+    outline-offset: 3px;
+    border-radius: var(--radius-hairline);
+  }
+
+  ::selection {
+    background-color: color-mix(in oklab, var(--color-sorot) 32%, transparent);
+    color: var(--color-teks);
+  }
+
+  /* Bilah gulir tipis agar kolom sticky tidak bergeser saat adegan berganti. */
+  html {
+    scrollbar-color: var(--color-garis-tegas) transparent;
+    scrollbar-width: thin;
+  }
+}
+
+@layer components {
+  /* Label teknis: nama tabel, kolom, operator, kode adegan. */
+  .label-teknis {
+    font-family: var(--font-teknis);
+    font-size: var(--text-eyebrow);
+    letter-spacing: var(--text-eyebrow--letter-spacing);
+    text-transform: uppercase;
+    color: var(--color-teks-samar);
+  }
+
+  /* Kutipan identifier apa adanya dari kode atau basis data. */
+  .kode-inline {
+    font-family: var(--font-teknis);
+    font-size: 0.86em;
+    padding: 0.1em 0.36em;
+    border: 1px solid var(--color-garis-tegas);
+    border-radius: var(--radius-hairline);
+    background-color: color-mix(in oklab, var(--color-sorot) 10%, transparent);
+    color: var(--color-teks);
+    white-space: nowrap;
+  }
+
+  .garis-rambut {
+    border-color: var(--color-garis);
+  }
+}
+
+/* Hormati permintaan pengurangan gerak di seluruh aplikasi. */
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
+}

@@ -8,6 +8,7 @@ import SceneKorpus from '@/scenes/SceneKorpus.vue'
 import SceneSkorKueri from '@/scenes/SceneSkorKueri.vue'
 import SceneRuangVektor from '@/scenes/SceneRuangVektor.vue'
 import ScenePencarian from '@/scenes/ScenePencarian.vue'
+import SceneSintesis from '@/scenes/SceneSintesis.vue'
 import { useTema } from '@/composables/useTema'
 import type { RingkasanAdegan } from '@/composables/adegan'
 import { angkaTanpaNilai, semuaAngka } from '@/data'
@@ -31,6 +32,7 @@ const adegan: RingkasanAdegan[] = [
   { id: 'S06', kode: 'S06', judul: 'Skor → kueri' },
   { id: 'S07', kode: 'S07', judul: 'Embedding' },
   { id: 'S08', kode: 'S08', judul: 'Pencarian' },
+  { id: 'S09', kode: 'S09', judul: 'Sintesis' },
 ]
 </script>
 
@@ -84,6 +86,7 @@ const adegan: RingkasanAdegan[] = [
     <SceneSkorKueri />
     <SceneRuangVektor />
     <ScenePencarian />
+    <SceneSintesis />
   </main>
 
   <footer

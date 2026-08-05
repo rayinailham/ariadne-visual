@@ -1375,22 +1375,44 @@ export interface KelasPelanggaran extends Bersumber {
   nomor: number
   judul: string
   isi: string
+  /** Nama galat sentinel pada kode worker. */
+  sentinel: string
+  sumberKode: string
+  /** Kondisi blok referensi tempat kelas ini dapat terjadi. */
+  kondisi: 'dengan-referensi' | 'tanpa-referensi' | 'keduanya'
+  /** Bentuk keluaran model yang memicu penolakan; dipakai simulasi di layar. */
+  contoh: string
+  /** Benar bila kelas ini ada pada kode tetapi tidak termasuk empat kelas naskah. */
+  diLuarNaskah?: boolean
 }
 
-/** Empat kelas pelanggaran yang menyebabkan keluaran ditolak. */
+/**
+ * Empat kelas pelanggaran yang disebut naskah, ditambah satu kelas kelima yang
+ * hanya ada pada kode. Kelas kelima tidak dihapus dan tidak digabungkan ke
+ * salah satu dari empat: satu-satunya penolakan yang pernah tercatat pada jalur
+ * nyata justru berasal dari kelas itu (`bab4.tex:179`).
+ */
 export const kelasPelanggaran: KelasPelanggaran[] = [
   {
     id: 'tanpa-identitas',
     nomor: 1,
     judul: 'Klaim tanpa identitas padahal referensi tersedia',
     isi: 'Referensi diinjeksikan, tetapi ada klaim yang tidak membawa satu pun identitas.',
+    sentinel: 'ErrClaimWithoutReference',
+    sumberKode: 'ecosystem-futureguide/analysis-worker/internal/gemini/client.go:510',
+    kondisi: 'dengan-referensi',
+    contoh: 'reference_ids: []',
     sumber: 'bab3.tex:223',
   },
   {
     id: 'format-salah',
     nomor: 2,
     judul: 'Label berformat salah',
-    isi: 'Label tidak mengikuti pola REF-NN yang disepakati.',
+    isi: 'Label tidak mengikuti pola REF-NN yang disepakati. Pemeriksanya adalah pola ^REF-\\d{2}$, sehingga REF-3 gugur karena hanya membawa satu digit.',
+    sentinel: 'ErrMalformedReferenceLabel',
+    sumberKode: 'ecosystem-futureguide/analysis-worker/internal/gemini/client.go:517',
+    kondisi: 'dengan-referensi',
+    contoh: 'reference_ids: ["REF-3"]',
     sumber: 'bab3.tex:223',
   },
   {
@@ -1398,6 +1420,10 @@ export const kelasPelanggaran: KelasPelanggaran[] = [
     nomor: 3,
     judul: 'Label di luar himpunan yang diinjeksikan',
     isi: 'Label berformat benar tetapi menunjuk referensi yang tidak diinjeksikan pada permintaan itu. Inilah fabrikasi label.',
+    sentinel: 'ErrUnknownReferenceLabel',
+    sumberKode: 'ecosystem-futureguide/analysis-worker/internal/gemini/client.go:521',
+    kondisi: 'dengan-referensi',
+    contoh: 'reference_ids: ["REF-11"]',
     sumber: 'bab3.tex:223',
   },
   {
@@ -1405,9 +1431,39 @@ export const kelasPelanggaran: KelasPelanggaran[] = [
     nomor: 4,
     judul: 'Identitas muncul pada kondisi tanpa referensi',
     isi: 'Skema melarang sitasi ketika referensi tidak tersedia, sehingga identitas apa pun adalah pelanggaran.',
+    sentinel: 'ErrCitationWithoutRetrieval',
+    sumberKode: 'ecosystem-futureguide/analysis-worker/internal/gemini/client.go:505',
+    kondisi: 'tanpa-referensi',
+    contoh: 'reference_ids: ["REF-01"]',
     sumber: 'bab3.tex:223',
   },
+  {
+    id: 'label-di-prosa',
+    nomor: 5,
+    judul: 'Label bocor ke dalam prosa klaim',
+    isi: 'Label hanya boleh berada pada ruas reference_ids. Ruas text adalah prosa yang dibaca siswa dan tidak boleh memuat kode sitasi internal. Pemeriksanya sengaja lebih longgar daripada pemeriksa format, yaitu \\bREF[-\\s]?\\d tanpa membedakan huruf besar-kecil, supaya bentuk salah ketik seperti Ref-02 atau REF 1 ikut tertangkap.',
+    sentinel: 'ErrReferenceLabelInClaimText',
+    sumberKode: 'ecosystem-futureguide/analysis-worker/internal/gemini/client.go:499',
+    kondisi: 'keduanya',
+    contoh: 'text: "… Ref-02 dan Ref-05 mencatat bahwa …"',
+    diLuarNaskah: true,
+    sumber: 'ecosystem-futureguide/analysis-worker/internal/gemini/client.go:55 + bab4.tex:179',
+  },
 ]
+
+/**
+ * Deviasi yang tidak didamaikan: naskah menyebut empat kelas pelanggaran,
+ * kode menegakkan lima.
+ */
+export const deviasiKelasPelanggaran: Butir = {
+  id: 'deviasi-kelas-pelanggaran',
+  judul: 'Naskah menyebut empat kelas, kode menegakkan lima',
+  isi: 'Bab 3 mendaftar empat kelas pelanggaran. Validator pada kode memiliki lima galat sentinel: keempat kelas itu ditambah label yang bocor ke dalam prosa klaim. Kelas kelima ditampilkan apa adanya dan tidak dilebur ke dalam empat kelas naskah.',
+  catatan:
+    'Satu-satunya penolakan gerbang validasi yang pernah tercatat pada jalur nyata, yaitu pada putaran F8B, justru berasal dari kelas kelima itu; pekerjaan yang sama selesai pada percobaan berikutnya.',
+  sumber:
+    'bab3.tex:223 + ecosystem-futureguide/analysis-worker/internal/gemini/client.go:50–56 + bab4.tex:179',
+}
 
 export const perlakuanLabelGanda: Butir = {
   id: 'label-ganda',
@@ -1437,6 +1493,310 @@ export const perilakuPenolakan: Butir[] = [
     sumber: 'bab3.tex:225',
   },
 ]
+
+/**
+ * Urutan blok pada prompt sintesis, persis seperti yang ditulis pembangun
+ * prompt. Yang penting bagi adegan ini: blok referensi berada sebelum blok
+ * instruksi, sehingga isinya sudah tersedia saat model mulai menalar.
+ */
+export const blokPrompt: Array<{
+  id: string
+  nama: string
+  keterangan: string
+  opsional?: boolean
+  referensi?: boolean
+}> = [
+  { id: 'peran', nama: 'PERAN', keterangan: 'Peran analis psikometri dan konselor karier.' },
+  { id: 'konteks', nama: 'KONTEKS', keterangan: 'Tiga instrumen beserta jumlah butir dan skala skornya.' },
+  { id: 'identitas', nama: 'IDENTITAS ASESI', keterangan: 'Hanya ditulis bila nama asesi tersedia.', opsional: true },
+  { id: 'skor', nama: 'SKOR PENGGUNA', keterangan: '35 skor domain, terurut menurun per instrumen.' },
+  { id: 'referensi', nama: 'REFERENSI AKADEMIK', keterangan: 'Blok referensi berlabel REF-01..REF-NN menurut urutan kemunculan.', referensi: true },
+  { id: 'instruksi', nama: 'INSTRUKSI', keterangan: 'Langkah 0 sampai 6: telaah referensi, sitasi wajib, pemetaan lintas-instrumen, pemilihan arketipe, lalu penyusunan.' },
+  { id: 'batasan', nama: 'BATASAN + DISIPLIN KLAIM', keterangan: 'Aturan disiplin klaim dibaca kedua kondisi ablasi, bukan hanya kondisi berbasis RAG.' },
+  { id: 'anggaran', nama: 'ANGGARAN PANJANG', keterangan: 'Kontrak panjang per bidang; tidak dapat ditimpa penyimpan prompt.' },
+  { id: 'panduan', nama: 'PANDUAN INTERPRETASI + KORELASI', keterangan: 'Rentang label skor dan aturan penopangan skor 70.' },
+  { id: 'format', nama: 'FORMAT KELUARAN', keterangan: 'JSON murni tanpa markdown, beserta contoh parsial.' },
+]
+
+export const sumberBlokPrompt =
+  'ecosystem-futureguide/analysis-worker/internal/gemini/prompt.go:32–340'
+
+export const kontrakSkema: Bersumber & {
+  mime: string
+  identitasMin: number
+  identitasMaks: number
+  identitasTanpaReferensi: number
+  panjangMaksLabel: number
+  unitKlaim: number
+  sumberKode: string
+} = {
+  mime: 'application/json',
+  identitasMin: 1,
+  identitasMaks: 3,
+  identitasTanpaReferensi: 0,
+  panjangMaksLabel: 8,
+  unitKlaim: 9,
+  sumberKode: 'ecosystem-futureguide/analysis-worker/internal/gemini/client.go:699–729',
+  sumber: 'bab3.tex:221',
+}
+
+/**
+ * Urutan pemeriksaan gerbang validasi, dibaca dari `validateClaimReferences`.
+ * Urutannya penting: pemeriksaan prosa dikerjakan sebelum isi reference_ids,
+ * dan pemeriksaan format dikerjakan sebelum keanggotaan himpunan.
+ */
+export const urutanGerbang: Array<Bersumber & { id: string; judul: string; isi: string }> = [
+  {
+    id: 'unit-lengkap',
+    judul: 'Sembilan unit klaim harus lengkap',
+    isi: 'Keluaran yang tidak memuat sembilan unit klaim ditolak sebelum label apa pun diperiksa.',
+    sumber: 'ecosystem-futureguide/analysis-worker/internal/gemini/client.go:490',
+  },
+  {
+    id: 'himpunan-sah',
+    judul: 'Himpunan label sah disusun ulang per permintaan',
+    isi: 'Label sah dibangkitkan dari jumlah referensi yang benar-benar diinjeksikan, sehingga ruang label tertutup dan diketahui sebelum keluaran dibaca.',
+    sumber: 'ecosystem-futureguide/analysis-worker/internal/gemini/client.go:493',
+  },
+  {
+    id: 'prosa',
+    judul: 'Prosa klaim diperiksa lebih dulu',
+    isi: 'Ruas text diperiksa terhadap pola label yang longgar sebelum reference_ids dibaca.',
+    sumber: 'ecosystem-futureguide/analysis-worker/internal/gemini/client.go:499',
+  },
+  {
+    id: 'kondisi-referensi',
+    judul: 'Cabang menurut ada atau tidaknya referensi',
+    isi: 'Tanpa referensi, satu label pun adalah pelanggaran. Dengan referensi, daftar kosong adalah pelanggaran.',
+    sumber: 'ecosystem-futureguide/analysis-worker/internal/gemini/client.go:503',
+  },
+  {
+    id: 'format-lalu-himpunan',
+    judul: 'Format dahulu, keanggotaan kemudian',
+    isi: 'Tiap label diuji terhadap pola REF-NN, lalu diuji keanggotaannya pada himpunan yang diinjeksikan.',
+    sumber: 'ecosystem-futureguide/analysis-worker/internal/gemini/client.go:517',
+  },
+  {
+    id: 'duplikat',
+    judul: 'Duplikat dinormalisasi, bukan ditolak',
+    isi: 'Kemunculan pertama dipertahankan, sisanya dibuang, dan jumlahnya dicatat pada metadata retrieval.',
+    sumber: 'ecosystem-futureguide/analysis-worker/internal/gemini/client.go:530',
+  },
+]
+
+/** Percobaan ulang saat keluaran ditolak gerbang validasi. */
+export const percobaanUlang: Bersumber & {
+  maksPercobaanUlang: number
+  totalPemanggilan: number
+  rumusJeda: string
+  jeda: Array<{ percobaan: number; minDetik: number; maksDetik: number }>
+  sumberKode: string
+} = {
+  maksPercobaanUlang: 3,
+  totalPemanggilan: 4,
+  rumusJeda: 'base = 2^(n-1) detik, ditambah jitter acak antara nol dan setengah base',
+  jeda: [
+    { percobaan: 2, minDetik: 1, maksDetik: 1.5 },
+    { percobaan: 3, minDetik: 2, maksDetik: 3 },
+    { percobaan: 4, minDetik: 4, maksDetik: 6 },
+  ],
+  sumberKode: 'ecosystem-futureguide/analysis-worker/internal/consumer/job_consumer.go:81 + :152 + :278',
+  sumber: 'bab3.tex:223',
+}
+
+export interface ReferensiTerinjeksi extends Bersumber {
+  label: string
+  id: string
+  judul: string
+  assessmentType: 'riasec' | 'ocean' | 'via_is' | 'cross'
+  domain: string
+  similarity: number
+}
+
+/**
+ * Delapan referensi yang benar-benar diinjeksikan pada satu pekerjaan nyata,
+ * dibaca dari penangkapan respons API. Urutan label mengikuti urutan kemunculan
+ * pada respons, yang terurut menurun menurut similarity.
+ */
+export const referensiTerinjeksi: ReferensiTerinjeksi[] = [
+  { label: 'REF-01', id: '4d9b358c-68c0-49bc-abe3-34802f5424f8', judul: 'Pearson-Marr Archetype Indicator (PMAI): A Twelve-Archetype Framework for Profile Identification', assessmentType: 'cross', domain: 'PMAI', similarity: 0.801124, sumber: 'bab4-results/14-reference-exposure/api-response-sample.json' },
+  { label: 'REF-02', id: '384a13a3-1cac-46ec-b8dc-5e6ca2aacfdd', judul: 'PMAI Archetype Selection Algorithm: How to Identify the Lead Archetype from a Combined Profile', assessmentType: 'cross', domain: 'PMAI', similarity: 0.788690, sumber: 'bab4-results/14-reference-exposure/api-response-sample.json' },
+  { label: 'REF-03', id: 'dabb42bd-0cd8-4754-8490-659f12bf66fa', judul: 'Archetype 1 — The Innocent: Profile Pattern and Score Indicators', assessmentType: 'cross', domain: 'Innocent', similarity: 0.788372, sumber: 'bab4-results/14-reference-exposure/api-response-sample.json' },
+  { label: 'REF-04', id: '27cceb62-30b2-451a-9b62-0c8e86c02c8a', judul: 'RIASEC Congruence and Person-Environment Fit', assessmentType: 'riasec', domain: 'Realistic', similarity: 0.784022, sumber: 'bab4-results/14-reference-exposure/api-response-sample.json' },
+  { label: 'REF-05', id: '4bb08218-2e30-460e-819f-419ea7bb5e63', judul: 'Integrating RIASEC, OCEAN, and VIA-IS for Comprehensive Psychological Profiling', assessmentType: 'cross', domain: 'RIASEC-OCEAN', similarity: 0.780140, sumber: 'bab4-results/14-reference-exposure/api-response-sample.json' },
+  { label: 'REF-06', id: 'f17658e2-0924-40b0-89a3-f990c8a0c357', judul: 'Transcendence Virtue Strengths — Appreciation of Beauty, Gratitude, Hope, Humor, Spirituality', assessmentType: 'via_is', domain: 'Appreciation of Beauty', similarity: 0.778144, sumber: 'bab4-results/14-reference-exposure/api-response-sample.json' },
+  { label: 'REF-07', id: '516cbb36-0a2f-4421-838e-6336ec6334ec', judul: 'RIASEC Type Combinations and Specific Career Pathway Predictions', assessmentType: 'riasec', domain: 'RIASEC', similarity: 0.775171, sumber: 'bab4-results/14-reference-exposure/api-response-sample.json' },
+  { label: 'REF-08', id: 'a66445fd-0bf4-4317-b24e-03f34edf711d', judul: 'Courage Virtue Strengths — Bravery, Perseverance, Honesty, Zest', assessmentType: 'via_is', domain: 'Bravery', similarity: 0.772551, sumber: 'bab4-results/14-reference-exposure/api-response-sample.json' },
+]
+
+export interface UnitKlaimContoh extends Bersumber {
+  claimPath: string
+  claimIndex: number
+  kelompok: string
+  label: string[]
+}
+
+/**
+ * Sembilan unit klaim beserta label yang benar-benar dipakai pada pekerjaan
+ * yang sama. Label diturunkan dari identitas dokumen pada indeks keterlacakan
+ * klaim, dipetakan balik ke posisi dokumen pada daftar referensi.
+ */
+export const unitKlaimContoh: UnitKlaimContoh[] = [
+  { claimPath: 'profile_summary.signature_description', claimIndex: 0, kelompok: 'Ringkasan tanda tangan profil', label: ['REF-02', 'REF-05'], sumber: 'bab4-results/14-reference-exposure/api-response-sample.json' },
+  { claimPath: 'detailed_analysis.strengths[0]', claimIndex: 1, kelompok: 'Butir kekuatan', label: ['REF-05', 'REF-07'], sumber: 'bab4-results/14-reference-exposure/api-response-sample.json' },
+  { claimPath: 'detailed_analysis.strengths[1]', claimIndex: 2, kelompok: 'Butir kekuatan', label: ['REF-06'], sumber: 'bab4-results/14-reference-exposure/api-response-sample.json' },
+  { claimPath: 'detailed_analysis.strengths[2]', claimIndex: 3, kelompok: 'Butir kekuatan', label: ['REF-08'], sumber: 'bab4-results/14-reference-exposure/api-response-sample.json' },
+  { claimPath: 'detailed_analysis.strengths[3]', claimIndex: 4, kelompok: 'Butir kekuatan', label: ['REF-06', 'REF-08'], sumber: 'bab4-results/14-reference-exposure/api-response-sample.json' },
+  { claimPath: 'detailed_analysis.strengths[4]', claimIndex: 5, kelompok: 'Butir kekuatan', label: ['REF-08'], sumber: 'bab4-results/14-reference-exposure/api-response-sample.json' },
+  { claimPath: 'career_pathing.role_prospects[0].match_reason', claimIndex: 6, kelompok: 'Alasan kecocokan prospek peran', label: ['REF-07'], sumber: 'bab4-results/14-reference-exposure/api-response-sample.json' },
+  { claimPath: 'career_pathing.role_prospects[1].match_reason', claimIndex: 7, kelompok: 'Alasan kecocokan prospek peran', label: ['REF-03'], sumber: 'bab4-results/14-reference-exposure/api-response-sample.json' },
+  { claimPath: 'career_pathing.role_prospects[2].match_reason', claimIndex: 8, kelompok: 'Alasan kecocokan prospek peran', label: ['REF-06'], sumber: 'bab4-results/14-reference-exposure/api-response-sample.json' },
+]
+
+/** Satu klaim nyata dari penangkapan respons, dipakai sebagai contoh di layar. */
+export const contohKlaimNyata: Bersumber & {
+  signatureTitle: string
+  claimPath: string
+  teks: string
+  label: string[]
+} = {
+  signatureTitle: 'The Seeker',
+  claimPath: 'profile_summary.signature_description',
+  teks: 'Bab4, profil Anda mencerminkan integrasi langka antara minat yang luas di seluruh domain RIASEC dan kekuatan karakter berbasis transendensi. Dengan skor 80 pada seluruh dimensi RIASEC dan VIA-IS, Anda menunjukkan pola motivasi tinggi untuk belajar dan berkontribusi. Ref-02 dan Ref-05 mencatat bahwa keseimbangan ini menandakan individu yang eksploratif namun memiliki keterikatan kuat pada nilai kemanusiaan.',
+  label: ['REF-02', 'REF-05'],
+  sumber: 'bab4-results/14-reference-exposure/api-response-sample.json',
+}
+
+/** Temuan pada artefak yang ditampilkan apa adanya, bukan dirapikan. */
+export const temuanLabelDiProsa: Butir = {
+  id: 'temuan-label-di-prosa',
+  judul: 'Penangkapan respons memuat label di dalam prosa klaim',
+  isi: 'Ruas text pada klaim ringkasan tanda tangan profil di penangkapan respons memuat frasa "Ref-02 dan Ref-05". Kedua label itu ter-resolve ke dua dokumen yang sama dengan yang tercatat pada reference_ids klaim tersebut, sehingga sitasinya benar; yang salah adalah tempatnya. Pola prosa pada validator hari ini, yaitu \\bREF[-\\s]?\\d tanpa membedakan huruf besar-kecil, menolak bentuk itu.',
+  catatan:
+    'Penangkapan bertanggal 29 Juli 2026, sedangkan larangan menuliskan label di dalam ruas text ditulis pada prompt yang dipakai rerun 31 Juli 2026. Artefak tidak disunting dan tidak dibuang.',
+  sumber:
+    'bab4-results/14-reference-exposure/api-response-sample.json + ecosystem-futureguide/analysis-worker/internal/gemini/client.go:64 + bab4.tex:179',
+}
+
+/**
+ * Bobot skor jalur cadangan, dibaca dari `scoreByDomains`. Nilai-nilai ini
+ * adalah bobot kecocokan label, bukan kesamaan makna.
+ */
+export const skorJalurCadangan: Bersumber & {
+  komponen: Array<{ id: string; syarat: string; bobot: string }>
+  urutanMuat: string
+} = {
+  komponen: [
+    { id: 'cross', syarat: 'jenis asesmen dokumen bernilai cross', bobot: '+0,3' },
+    { id: 'domain', syarat: 'nama domain cocok pada judul, isi, atau kolom domain', bobot: '+ skor domain / 100 × 0,7' },
+    { id: 'tag', syarat: 'tag dokumen termasuk domain teratas profil', bobot: '+0,15 per tag' },
+  ],
+  urutanMuat: 'Dokumen dimuat menurut created_at menurun, dibatasi 500 baris, lalu diskor, diurutkan menurun, dan dipotong pada k.',
+  sumber: 'ecosystem-futureguide/analysis-worker/internal/rag/retriever.go:252–275',
+}
+
+/** Tiga lapis pemaparan pada respons hasil asesmen. */
+export const lapisPemaparan: Array<Bersumber & { id: string; nama: string; isi: string }> = [
+  {
+    id: 'daftar-referensi',
+    nama: 'Daftar referensi tingkat hasil',
+    isi: 'Identitas dokumen, judul, sumber, jenis asesmen, domain, dan nilai kesamaan, terurut menurun menurut similarity.',
+    sumber: 'bab4.tex:186',
+  },
+  {
+    id: 'indeks-klaim',
+    nama: 'Indeks keterlacakan klaim',
+    isi: 'Sembilan grup, masing-masing membawa jalur klaim, indeks klaim, dan daftar identitas dokumen penopangnya.',
+    sumber: 'bab4.tex:186',
+  },
+  {
+    id: 'pohon-hasil',
+    nama: 'Identitas tertanam pada pohon hasil',
+    isi: 'Identitas yang sama tertanam pada tiap unit klaim di dalam hasil, sehingga konsumen tidak perlu merekonstruksi apa pun dari teks.',
+    sumber: 'bab4.tex:186',
+  },
+]
+
+export const ujiKonsistensiKunci: Butir = {
+  id: 'uji-konsistensi-kunci',
+  judul: 'Kedua lapis tidak dapat saling bertentangan',
+  isi: 'Setiap identitas yang muncul pada indeks keterlacakan klaim benar-benar ada di dalam daftar referensi tingkat hasil.',
+  catatan:
+    'Sumber kebenarannya adalah relasi yang ditulis worker di dalam satu transaksi, bukan sitasi yang diminta ulang dari model saat pembacaan.',
+  sumber: 'bab4.tex:186',
+}
+
+/** Baris yang ditulis satu transaksi bersama hasil analisis. */
+export const relasiTransaksi: Array<Bersumber & { tabel: string; isi: string }> = [
+  { tabel: 'assessments', isi: 'Status, hasil analisis, dan waktu selesai.', sumber: 'ecosystem-futureguide/analysis-worker/internal/consumer/job_consumer.go:938' },
+  { tabel: 'assessment_domain_scores', isi: '35 skor domain per asesmen.', sumber: 'ecosystem-futureguide/analysis-worker/internal/consumer/job_consumer.go:953' },
+  { tabel: 'assessment_references', isi: 'Dokumen yang diambil pipeline beserta nilai similarity-nya.', sumber: 'ecosystem-futureguide/analysis-worker/internal/consumer/job_consumer.go:982' },
+  { tabel: 'assessment_claim_references', isi: 'Jalur klaim, indeks klaim, identitas dokumen, dan urutan sitasi.', sumber: 'ecosystem-futureguide/analysis-worker/internal/consumer/job_consumer.go:1000' },
+]
+
+/** Label visual S09; ditempatkan di lapisan data agar viz tidak menulis istilah sendiri. */
+export const labelSintesis: Bersumber & {
+  judulVisual: string
+  prompt: string
+  blokReferensi: string
+  blokInstruksi: string
+  model: string
+  skema: string
+  gerbang: string
+  terima: string
+  tolak: string
+  persist: string
+  papar: string
+  buatUlang: string
+  unitKlaim: string
+  identitas: string
+  jalur: string
+  jalurVektor: string
+  jalurCadangan: string
+  kondisiReferensi: string
+  denganReferensi: string
+  tanpaReferensi: string
+  picu: string
+  patuh: string
+  labelGanda: string
+  percobaan: string
+  gagalTotal: string
+  keterlacakan: string
+  dokumen: string
+  bukanPelanggaran: string
+  batasJaminan: string
+} = {
+  judulVisual: 'Sintesis, gerbang validasi, dan keterlacakan',
+  prompt: 'Prompt sintesis',
+  blokReferensi: 'blok referensi',
+  blokInstruksi: 'blok instruksi',
+  model: 'Model generatif',
+  skema: 'responseSchema per permintaan',
+  gerbang: 'Gerbang validasi',
+  terima: 'diterima',
+  tolak: 'ditolak utuh',
+  persist: 'Satu transaksi',
+  papar: 'GET /assessments/{job_id}',
+  buatUlang: 'buat ulang',
+  unitKlaim: 'Sembilan unit klaim',
+  identitas: 'identitas referensi',
+  jalur: 'Jalur retrieval',
+  jalurVektor: 'vektor',
+  jalurCadangan: 'cadangan',
+  kondisiReferensi: 'Blok referensi',
+  denganReferensi: 'diinjeksikan',
+  tanpaReferensi: 'tidak diinjeksikan',
+  picu: 'Picu keadaan',
+  patuh: 'keluaran patuh',
+  labelGanda: 'label ganda',
+  percobaan: 'percobaan',
+  gagalTotal: 'pekerjaan dinyatakan gagal',
+  keterlacakan: 'Label ter-resolve menjadi identitas dokumen',
+  dokumen: 'dokumen',
+  bukanPelanggaran: 'bukan pelanggaran',
+  batasJaminan: 'Validasi menjamin identitas ter-resolve ke dokumen yang benar-benar diambil, bukan bahwa dokumen itu mendukung klaimnya secara makna.',
+  sumber: 'bab3.tex:208–239 + bab4.tex:186',
+}
 
 export interface PemicuCadangan extends Bersumber {
   id: string
@@ -1796,5 +2156,81 @@ export const angkaRag: Angka[] = [
     satuan: 'grup',
     status: 'terukur',
     sumber: 'bab4.tex:186',
+  },
+  {
+    id: 'rag.identitas-per-klaim-min',
+    adegan: 'S09',
+    label: 'Identitas referensi minimum per klaim',
+    nilai: 1,
+    tampil: '1',
+    satuan: 'identitas',
+    status: 'terukur',
+    catatan: 'Berlaku ketika referensi tersedia; pada kondisi tanpa referensi skema mengunci minimum dan maksimum pada nol.',
+    sumber: 'ecosystem-futureguide/analysis-worker/internal/gemini/client.go:686',
+  },
+  {
+    id: 'rag.identitas-per-klaim-maks',
+    adegan: 'S09',
+    label: 'Identitas referensi maksimum per klaim',
+    nilai: 3,
+    tampil: '3',
+    satuan: 'identitas',
+    status: 'terukur',
+    sumber: 'ecosystem-futureguide/analysis-worker/internal/gemini/client.go:687',
+  },
+  {
+    id: 'rag.kelas-pelanggaran-naskah',
+    adegan: 'S09',
+    label: 'Kelas pelanggaran menurut naskah',
+    nilai: 4,
+    tampil: '4',
+    satuan: 'kelas',
+    status: 'terukur',
+    sumber: 'bab3.tex:223',
+  },
+  {
+    id: 'rag.kelas-pelanggaran-kode',
+    adegan: 'S09',
+    label: 'Galat sentinel penolakan pada kode',
+    nilai: kelasPelanggaran.length,
+    tampil: String(kelasPelanggaran.length),
+    satuan: 'kelas',
+    status: 'terukur',
+    catatan:
+      'Empat kelas naskah ditambah label yang bocor ke dalam prosa klaim. Deviasi dicatat, bukan didamaikan.',
+    sumber: 'ecosystem-futureguide/analysis-worker/internal/gemini/client.go:50–56',
+  },
+  {
+    id: 'rag.label-ganda-dinormalisasi',
+    adegan: 'S09',
+    label: 'Label dinormalisasi karena duplikasi',
+    nilai: 0,
+    tampil: '0',
+    satuan: 'label',
+    status: 'terukur',
+    catatan: 'Rerun 31 Juli 2026; tidak ada klaim pada keluaran yang diterima yang membawa identitas ganda.',
+    sumber: 'bab4.tex:179',
+  },
+  {
+    id: 'rag.referensi-pada-penangkapan',
+    adegan: 'S09',
+    label: 'Referensi pada penangkapan respons',
+    nilai: referensiTerinjeksi.length,
+    tampil: String(referensiTerinjeksi.length),
+    satuan: 'referensi',
+    status: 'terukur',
+    catatan: 'Satu pekerjaan nyata bertanggal 29 Juli 2026; sama dengan k final, tetapi dibaca dari artefak yang berbeda.',
+    sumber: 'bab4-results/14-reference-exposure/api-response-sample.json',
+  },
+  {
+    id: 'rag.identitas-pada-penangkapan',
+    adegan: 'S09',
+    label: 'Identitas referensi pada sembilan unit klaim',
+    nilai: unitKlaimContoh.reduce((jumlah, unit) => jumlah + unit.label.length, 0),
+    tampil: String(unitKlaimContoh.reduce((jumlah, unit) => jumlah + unit.label.length, 0)),
+    satuan: 'identitas',
+    status: 'terukur',
+    catatan: 'Dihitung dari indeks keterlacakan klaim pada penangkapan respons, bukan diketik ulang.',
+    sumber: 'bab4-results/14-reference-exposure/api-response-sample.json',
   },
 ]

@@ -4,7 +4,7 @@
 
 Setiap angka yang tayang di situs wajib muncul di sini beserta berkas dan baris asalnya. Angka tanpa bukti ditulis kosong, tidak ditebak. Metrik yang penyebutnya nol ditulis tak terdefinisi, bukan nol.
 
-Total angka terdaftar: **93**. Tanpa nilai numerik: **8**.
+Total angka terdaftar: **100**. Tanpa nilai numerik: **8**.
 
 ## S01 — Masalah
 
@@ -100,6 +100,13 @@ Total angka terdaftar: **93**. Tanpa nilai numerik: **8**.
 | Unit klaim per keluaran | 9 | terukur | `bab4.tex:162` | 1 ringkasan tanda tangan + 5 butir kekuatan + 3 alasan kecocokan prospek peran. |
 | Batas muat jalur cadangan | 500 | terukur | `ecosystem-futureguide/analysis-worker/internal/rag/retriever.go:170` | — |
 | Grup indeks keterlacakan klaim pada respons | 9 | terukur | `bab4.tex:186` | — |
+| Identitas referensi minimum per klaim | 1 | terukur | `ecosystem-futureguide/analysis-worker/internal/gemini/client.go:686` | Berlaku ketika referensi tersedia; pada kondisi tanpa referensi skema mengunci minimum dan maksimum pada nol. |
+| Identitas referensi maksimum per klaim | 3 | terukur | `ecosystem-futureguide/analysis-worker/internal/gemini/client.go:687` | — |
+| Kelas pelanggaran menurut naskah | 4 | terukur | `bab3.tex:223` | — |
+| Galat sentinel penolakan pada kode | 5 | terukur | `ecosystem-futureguide/analysis-worker/internal/gemini/client.go:50–56` | Empat kelas naskah ditambah label yang bocor ke dalam prosa klaim. Deviasi dicatat, bukan didamaikan. |
+| Label dinormalisasi karena duplikasi | 0 | terukur | `bab4.tex:179` | Rerun 31 Juli 2026; tidak ada klaim pada keluaran yang diterima yang membawa identitas ganda. |
+| Referensi pada penangkapan respons | 8 | terukur | `bab4-results/14-reference-exposure/api-response-sample.json` | Satu pekerjaan nyata bertanggal 29 Juli 2026; sama dengan k final, tetapi dibaca dari artefak yang berbeda. |
+| Identitas referensi pada sembilan unit klaim | 12 | terukur | `bab4-results/14-reference-exposure/api-response-sample.json` | Dihitung dari indeks keterlacakan klaim pada penangkapan respons, bukan diketik ulang. |
 
 ## S10 — Obrolan SSE
 

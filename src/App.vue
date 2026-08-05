@@ -2,6 +2,7 @@
 import ProgressRail from '@/components/ProgressRail.vue'
 import SceneMasalah from '@/scenes/SceneMasalah.vue'
 import SceneInstrumen from '@/scenes/SceneInstrumen.vue'
+import SceneArsitektur from '@/scenes/SceneArsitektur.vue'
 import { useTema } from '@/composables/useTema'
 import type { RingkasanAdegan } from '@/composables/adegan'
 import { angkaTanpaNilai, semuaAngka } from '@/data'
@@ -19,6 +20,7 @@ const jumlahAngkaTanpaNilai = angkaTanpaNilai.length
 const adegan: RingkasanAdegan[] = [
   { id: 'S01', kode: 'S01', judul: 'Masalah' },
   { id: 'S02', kode: 'S02', judul: 'Instrumen' },
+  { id: 'S03', kode: 'S03', judul: 'Arsitektur' },
 ]
 </script>
 
@@ -66,6 +68,7 @@ const adegan: RingkasanAdegan[] = [
 
     <SceneMasalah />
     <SceneInstrumen />
+    <SceneArsitektur />
   </main>
 
   <footer

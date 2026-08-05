@@ -142,6 +142,77 @@ export interface LangkahJalur extends Bersumber {
   beban: 'cepat' | 'lambat'
 }
 
+export interface TitikJalurArsitektur extends Bersumber {
+  id: string
+  nama: string
+  ringkas: string
+  beban: 'cepat' | 'lambat'
+}
+
+/**
+ * Alur utama S03 dalam bentuk yang dapat digambar lurus. Ruas Gemini menuju
+ * notifikasi merangkum hasil yang kembali ke worker, dipersist, lalu
+ * diterbitkan melalui Redis Pub/Sub; rincian itu tetap tampil pada `ringkas`.
+ */
+export const titikJalurArsitektur: TitikJalurArsitektur[] = [
+  {
+    id: 'klien-masuk',
+    nama: 'Klien',
+    ringkas: 'Mengirim jawaban asesmen melalui HTTP.',
+    beban: 'cepat',
+    sumber: 'bab3.tex:254',
+  },
+  {
+    id: 'assessment-service',
+    nama: 'assessment-service',
+    ringkas: 'Menyelesaikan transaksi asesmen tanpa menunggu analisis.',
+    beban: 'cepat',
+    sumber: 'bab3.tex:134, bab3.tex:254',
+  },
+  {
+    id: 'outbox',
+    nama: 'transactional outbox',
+    ringkas: 'Menyimpan pekerjaan bersama data asesmen dalam satu transaksi PostgreSQL.',
+    beban: 'cepat',
+    sumber: 'bab3.tex:254',
+  },
+  {
+    id: 'redis',
+    nama: 'Redis',
+    ringkas: 'Poller menerbitkan pekerjaan ke antrean setelah transaksi selesai.',
+    beban: 'cepat',
+    sumber: 'bab3.tex:254',
+  },
+  {
+    id: 'analysis-worker',
+    nama: 'analysis-worker',
+    ringkas: 'Mengklaim pekerjaan, menghitung skor, dan menjalankan retrieval RAG.',
+    beban: 'lambat',
+    sumber: 'bab3.tex:134, bab3.tex:266',
+  },
+  {
+    id: 'gemini',
+    nama: 'Gemini',
+    ringkas: 'Menyintesis analisis ber-skema setelah referensi ditemukan.',
+    beban: 'lambat',
+    sumber: 'bab3.tex:116, bab3.tex:134',
+  },
+  {
+    id: 'notification-service',
+    nama: 'notification-service',
+    ringkas: 'Hasil kembali ke worker, dipersist, lalu statusnya diteruskan dari Redis Pub/Sub sebagai SSE.',
+    beban: 'cepat',
+    sumber: 'bab3.tex:116, bab4.tex:38',
+  },
+  {
+    id: 'klien-keluar',
+    nama: 'Klien',
+    ringkas: 'Menerima status analisis tanpa menahan permintaan pengiriman asesmen.',
+    beban: 'cepat',
+    sumber: 'bab3-metodologi/tabel-lama/layanan.tex:16',
+  },
+]
+
 /** Jalur permintaan yang dinyalakan per langkah narasi pada S03. */
 export const jalurPermintaan: LangkahJalur[] = [
   {

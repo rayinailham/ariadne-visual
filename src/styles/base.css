@@ -124,7 +124,7 @@
 /* Hormati permintaan pengurangan gerak di seluruh aplikasi. */
 @media (prefers-reduced-motion: reduce) {
   html {
-    scroll-behavior: auto;
+    scroll-behavior: auto !important;
   }
 
   *,

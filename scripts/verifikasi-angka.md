@@ -4,7 +4,7 @@
 
 Setiap angka yang tayang di situs wajib muncul di sini beserta berkas dan baris asalnya. Angka tanpa bukti ditulis kosong, tidak ditebak. Metrik yang penyebutnya nol ditulis tak terdefinisi, bukan nol.
 
-Total angka terdaftar: **87**. Tanpa nilai numerik: **8**.
+Total angka terdaftar: **93**. Tanpa nilai numerik: **8**.
 
 ## S01 — Masalah
 
@@ -84,6 +84,12 @@ Total angka terdaftar: **87**. Tanpa nilai numerik: **8**.
 | Maksimum dokumen per kueri | 3 | terukur | `ecosystem-futureguide/analysis-worker/internal/consumer/job_consumer.go:691` | — |
 | Batas referensi analisis (k) | 8 | terukur | `bab4-results/BAB4_ANGKA_FINAL.md:31` | Runtime sebelum kalibrasi bernilai 6; setelah kalibrasi 8, diterapkan pada DB dan retrieval_cap worker. |
 | Kondisi evaluasi retrieval | 50 | terukur | `bab4.tex:116` | 5 profil × 2 jalur × 5 nilai k; seluruhnya berstatus ok tanpa no_result. |
+| Batas dokumen per kueri pada harness kalibrasi k | 500 | terukur | `ecosystem-futureguide/analysis-worker/internal/rag/retriever_eval_test.go:28` | Harness memakai batas tak terkapkan 500 per kueri, berbeda dari runtime yang memakai 3. Deviasi dicatat, bukan didamaikan. |
+| Dokumen unik terambil pada jalur vektor | 24 | terukur | `bab4-results/03-retrieval/retrieval-top-k.json` | Gabungan lima profil × lima nilai k pada jalur vektor; dihitung dari artefak, bukan diketik. |
+| Precision@k pada k final | 1,0000 | terukur | `bab4-results/BAB4_ANGKA_FINAL.md:33` | Jalur vektor, rerata lima profil; tiap profil 8 dari 8. Datar sejak k=4 sehingga tidak dapat menjadi pembeda. |
+| Strong-Relevance@k pada k final | 0,5000 (4/8) | terukur | `bab4-results/BAB4_ANGKA_FINAL.md:34` | Jalur vektor, rerata lima profil; setara 4,0 dari 8 referensi per profil. |
+| Tambahan referensi berdukungan kuat dari k=6 ke k=8 | +1,4 | terukur | `bab4.tex:131` | Lonjakan terbesar pada seluruh rentang yang diuji. |
+| Tambahan referensi berdukungan kuat dari k=8 ke k=10 | +0,8 | terukur | `bab4.tex:131` | Disertai penurunan rasio Strong-Relevance 0,02 dan tambahan sekitar 500 token konteks. |
 | Token konteks terendah | 1.249 | terukur | `bab4.tex:116` | — |
 | Token konteks tertinggi | 4.022 | terukur | `bab4.tex:116` | — |
 

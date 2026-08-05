@@ -383,6 +383,13 @@ export interface LangkahPencarian extends Bersumber {
 
 export const langkahPencarian: LangkahPencarian[] = [
   {
+    id: 'traversal',
+    judul: 'Traversal indeks HNSW',
+    isi: 'Pengurutan menurut jarak kosinus dilayani indeks HNSW pada kolom embedding. Pencarian masuk dari lapisan atas yang jarang, turun ke lapisan yang makin padat, lalu menelusuri tetangga terdekat pada lapisan dasar.',
+    nilai: 'ORDER BY embedding <=> $1::vector',
+    sumber: 'ecosystem-futureguide/analysis-worker/internal/rag/retriever.go:87',
+  },
+  {
     id: 'jarak',
     judul: 'Operator jarak kosinus',
     isi: 'Operator <=> pgvector mengembalikan jarak kosinus, sehingga kesamaan dihitung sebagai satu dikurangi jarak itu.',
@@ -399,14 +406,14 @@ export const langkahPencarian: LangkahPencarian[] = [
   {
     id: 'filter-jenis',
     judul: 'Filter jenis asesmen',
-    isi: 'Hanya dokumen yang jenis asesmennya sesuai atau bertipe cross yang ikut dipertimbangkan.',
+    isi: 'Hanya dokumen yang jenis asesmennya sesuai atau bertipe cross yang ikut dipertimbangkan. Karena itu dokumen berjenis riasec hanya dapat berasal dari kueri RIASEC, sedangkan dokumen cross dapat berasal dari kueri mana pun.',
     nilai: "assessment_type = $2 OR assessment_type = 'cross'",
     sumber: 'ecosystem-futureguide/analysis-worker/internal/rag/retriever.go:84',
   },
   {
     id: 'maks-per-kueri',
     judul: 'Maksimum tiga dokumen per kueri',
-    isi: 'Tiap kueri mengambil paling banyak tiga dokumen; dedup dan pemotongan cap dikerjakan setelah kelimanya digabung.',
+    isi: 'Pada runtime, tiap kueri mengambil paling banyak tiga dokumen; dedup dan pemotongan cap dikerjakan setelah kelimanya digabung.',
     nilai: 'topK = 3',
     sumber: 'ecosystem-futureguide/analysis-worker/internal/consumer/job_consumer.go:691',
   },
@@ -418,12 +425,816 @@ export const langkahPencarian: LangkahPencarian[] = [
   },
   {
     id: 'potong-k',
-    judul: 'Potong pada k teratas',
-    isi: 'Sisa hasil dipotong pada k teratas; k dikendalikan parameter runtime analysis.rag_top_k.',
+    judul: 'Urutkan menurun lalu potong pada k',
+    isi: 'Hasil dedup diurutkan menurut kesamaan menurun dengan identitas dokumen sebagai pemecah seri, lalu dipotong pada k teratas. Nilai k dikendalikan parameter runtime analysis.rag_top_k.',
     nilai: 'k = 8',
-    sumber: 'bab3.tex:206',
+    sumber: 'ecosystem-futureguide/analysis-worker/internal/consumer/job_consumer.go:851',
   },
 ]
+
+/**
+ * Traversal HNSW yang digambarkan pada S08.
+ *
+ * Parameter m dan ef_construction dibaca dari migrasi indeks (lihat `korpus.ts`).
+ * Jumlah simpul per lapisan pada gambar bersifat ilustratif: pgvector tidak
+ * memaparkan struktur graf, dan artefak Bab 4 tidak merekam jalur traversal.
+ */
+export const traversalHnsw: Bersumber & {
+  lapisan: Array<{ nama: string; simpul: number; keterangan: string }>
+  batasPembacaan: string
+  catatanEfSearch: string
+} = {
+  lapisan: [
+    { nama: 'lapisan atas', simpul: 3, keterangan: 'Jarang. Titik masuk pencarian; satu lompatan menutup jarak besar.' },
+    { nama: 'lapisan tengah', simpul: 7, keterangan: 'Makin padat. Pencarian pindah ke tetangga yang lebih dekat ke vektor kueri.' },
+    { nama: 'lapisan dasar', simpul: 15, keterangan: 'Memuat seluruh unit korpus. Kandidat tetangga terdekat dikunci di sini.' },
+  ],
+  batasPembacaan:
+    'Jumlah simpul, posisi titik, dan jalur pada gambar adalah tata letak ilustratif untuk menjelaskan arti pencarian berlapis. pgvector tidak memaparkan isi graf dan artefak Bab 4 tidak merekam traversal yang sesungguhnya.',
+  catatanEfSearch:
+    'Migrasi hanya menyetel m dan ef_construction; hnsw.ef_search tidak diatur di migrasi maupun kode worker, sehingga nilai bawaan pgvector yang berlaku.',
+  sumber: 'ecosystem-futureguide/migrations/014_pgvector_embeddings.up.sql:47',
+}
+
+export interface DokumenRetrieval extends Bersumber {
+  /** Identitas pendek untuk tampilan; urut menurut judul. */
+  id: string
+  idBasisData: string
+  judul: string
+  kutipan: string
+  assessmentType: 'riasec' | 'ocean' | 'via_is' | 'cross'
+  domain: string
+  berkasAsal: string
+  sumberMetadata: string
+}
+
+export interface PeringkatDokumen {
+  idDok: string
+  similarity: number
+}
+
+export interface KondisiK {
+  k: number
+  status: string
+  tokenKonteks: number
+  precision: number
+  strongRasio: number
+  /** Jumlah referensi bernilai rubrik 2 pada kondisi ini. */
+  strongAbsolut: number
+  /** Jumlah referensi bernilai rubrik 1 atau 2 pada kondisi ini. */
+  relevanAbsolut: number
+  /** Nilai rubrik per peringkat, urut sesuai peringkat aslinya. */
+  nilaiRubrik: number[]
+}
+
+export interface ProfilRetrieval extends Bersumber {
+  profil: string
+  peringkat: PeringkatDokumen[]
+  kondisi: KondisiK[]
+  sumberRubrik: string
+}
+
+/** Registri dokumen yang benar-benar terambil pada jalur vektor, lintas lima profil dan lima nilai k. */
+export const dokumenRetrieval: DokumenRetrieval[] = [
+  {
+    id: 'D01',
+    idBasisData: 'dabb42bd-0cd8-4754-8490-659f12bf66fa',
+    judul: 'Archetype 1 — The Innocent: Profile Pattern and Score Indicators',
+    kutipan: 'Pearson, C. S. (1991). Awakening the heroes within: Twelve archetypes to help us find ourselves and transform our world. HarperOne. (PMAI archetype: Innocent)',
+    assessmentType: 'cross',
+    domain: 'Innocent',
+    berkasAsal: 'cross-reference/pmai-archetypes.txt',
+    sumber: 'bab4-results/03-retrieval/retrieval-top-k.json',
+    sumberMetadata: 'ecosystem-futureguide/analysis-worker/knowledge/manifest.json',
+  },
+  {
+    id: 'D02',
+    idBasisData: '7745f393-be78-43ad-be17-84f5503ad740',
+    judul: 'Archetype 2 — The Orphan/Everyperson: Profile Pattern and Score Indicators',
+    kutipan: 'Mark, M., & Pearson, C. S. (2001). The hero and the outlaw: Building extraordinary brands through the power of archetypes. McGraw-Hill. (PMAI archetype: Orphan/Everyperson)',
+    assessmentType: 'cross',
+    domain: 'Orphan/Everyperson',
+    berkasAsal: 'cross-reference/pmai-archetypes.txt',
+    sumber: 'bab4-results/03-retrieval/retrieval-top-k.json',
+    sumberMetadata: 'ecosystem-futureguide/analysis-worker/knowledge/manifest.json',
+  },
+  {
+    id: 'D03',
+    idBasisData: '40723d12-050b-41ac-87ad-05e674fc16ff',
+    judul: 'Character Strengths and Resilience Under Adversity',
+    kutipan: 'Martinez-Marti, M. L., & Ruch, W. (2017). Character strengths predict resilience over and above positive affect, self-efficacy, optimism, social support, self-esteem, and life satisfaction. The Journal of Positive Psychology, 12(2), 110-119.',
+    assessmentType: 'via_is',
+    domain: 'VIA',
+    berkasAsal: 'via-is/wellbeing-research.txt',
+    sumber: 'bab4-results/03-retrieval/retrieval-top-k.json',
+    sumberMetadata: 'ecosystem-futureguide/analysis-worker/knowledge/manifest.json',
+  },
+  {
+    id: 'D04',
+    idBasisData: '668c16cb-98fe-4eba-99bd-a345e10ac01b',
+    judul: 'Compatibility Between Person and Environment: Congruence Theory in Career Outcomes',
+    kutipan: 'Nye, C. D., Su, R., Rounds, J., & Drasgow, F. (2012). Vocational interests and performance: A quantitative summary of over 60 years of research. Perspectives on Psychological Science, 7(4), 384-403. https://doi.org/10.1177/1745691612449021',
+    assessmentType: 'riasec',
+    domain: 'RIASEC',
+    berkasAsal: 'riasec/adolescent-and-cross-cultural.txt',
+    sumber: 'bab4-results/03-retrieval/retrieval-top-k.json',
+    sumberMetadata: 'ecosystem-futureguide/analysis-worker/knowledge/manifest.json',
+  },
+  {
+    id: 'D05',
+    idBasisData: 'a66445fd-0bf4-4317-b24e-03f34edf711d',
+    judul: 'Courage Virtue Strengths — Bravery, Perseverance, Honesty, Zest',
+    kutipan: 'Peterson, C., & Seligman, M. E. P. (2004). Character strengths and virtues. Oxford University Press.',
+    assessmentType: 'via_is',
+    domain: 'Bravery',
+    berkasAsal: 'via-is/character-strengths.txt',
+    sumber: 'bab4-results/03-retrieval/retrieval-top-k.json',
+    sumberMetadata: 'ecosystem-futureguide/analysis-worker/knowledge/manifest.json',
+  },
+  {
+    id: 'D06',
+    idBasisData: '2aa66fd4-553d-43f0-a471-af6a7d5c70fd',
+    judul: 'Holistic Profile Patterns: Common Archetypes in Combined RIASEC-OCEAN-VIA Assessment',
+    kutipan: 'Armstrong, P. I., Day, S. X., McVay, J. P., & Rounds, J. (2008). Holland\'s RIASEC model as an integrative framework for individual differences research. Journal of Career Assessment, 16(1), 3-18.',
+    assessmentType: 'cross',
+    domain: 'PMAI',
+    berkasAsal: 'cross-reference/integration-research.txt',
+    sumber: 'bab4-results/03-retrieval/retrieval-top-k.json',
+    sumberMetadata: 'ecosystem-futureguide/analysis-worker/knowledge/manifest.json',
+  },
+  {
+    id: 'D07',
+    idBasisData: '1213083d-ee13-46fb-a3eb-73a7697d2943',
+    judul: 'Holland Code Stability from High School to Mid-Career',
+    kutipan: 'Low, K. S. D., Yoon, M., Roberts, B. W., & Rounds, J. (2005). The stability of vocational interests from early adolescence to middle adulthood: A quantitative review of longitudinal studies. Psychological Bulletin, 131(5), 713-737. https://doi.org/10.1037/0033-2909.131.5.713',
+    assessmentType: 'riasec',
+    domain: 'RIASEC',
+    berkasAsal: 'riasec/adolescent-and-cross-cultural.txt',
+    sumber: 'bab4-results/03-retrieval/retrieval-top-k.json',
+    sumberMetadata: 'ecosystem-futureguide/analysis-worker/knowledge/manifest.json',
+  },
+  {
+    id: 'D08',
+    idBasisData: 'f9d6b4b1-28e9-429b-a092-d9b19c8402e7',
+    judul: 'Holland\'s RIASEC Theory of Vocational Personalities and Work Environments',
+    kutipan: 'Holland, J. L. (1997). Making vocational choices: A theory of vocational personalities and work environments (3rd ed.). Psychological Assessment Resources.',
+    assessmentType: 'riasec',
+    domain: 'RIASEC',
+    berkasAsal: 'riasec/holland-theory.txt',
+    sumber: 'bab4-results/03-retrieval/retrieval-top-k.json',
+    sumberMetadata: 'ecosystem-futureguide/analysis-worker/knowledge/manifest.json',
+  },
+  {
+    id: 'D09',
+    idBasisData: '4bb08218-2e30-460e-819f-419ea7bb5e63',
+    judul: 'Integrating RIASEC, OCEAN, and VIA-IS for Comprehensive Psychological Profiling',
+    kutipan: 'Armstrong, P. I., Day, S. X., McVay, J. P., & Rounds, J. (2008). Holland\'s RIASEC model as an integrative framework for individual differences research. Journal of Career Assessment, 16(1), 3-18.',
+    assessmentType: 'cross',
+    domain: 'RIASEC-OCEAN',
+    berkasAsal: 'cross-reference/cross-analysis.txt',
+    sumber: 'bab4-results/03-retrieval/retrieval-top-k.json',
+    sumberMetadata: 'ecosystem-futureguide/analysis-worker/knowledge/manifest.json',
+  },
+  {
+    id: 'D10',
+    idBasisData: '178d813b-5041-400b-a447-860966541188',
+    judul: 'Interest-Ability Congruence and Career Satisfaction',
+    kutipan: 'Tracey, T. J. G. (2002). Personal Globe Inventory: Measurement of the spherical model of interests and competence beliefs. Journal of Vocational Behavior, 60(1), 113-172.',
+    assessmentType: 'riasec',
+    domain: 'RIASEC',
+    berkasAsal: 'riasec/validation-research.txt',
+    sumber: 'bab4-results/03-retrieval/retrieval-top-k.json',
+    sumberMetadata: 'ecosystem-futureguide/analysis-worker/knowledge/manifest.json',
+  },
+  {
+    id: 'D11',
+    idBasisData: '8cf66397-b696-4b45-ab4a-d385f4a76271',
+    judul: 'Justice Virtue Strengths — Teamwork, Fairness, Leadership',
+    kutipan: 'Peterson, C., & Seligman, M. E. P. (2004). Character strengths and virtues. Oxford University Press.',
+    assessmentType: 'via_is',
+    domain: 'Teamwork',
+    berkasAsal: 'via-is/character-strengths.txt',
+    sumber: 'bab4-results/03-retrieval/retrieval-top-k.json',
+    sumberMetadata: 'ecosystem-futureguide/analysis-worker/knowledge/manifest.json',
+  },
+  {
+    id: 'D12',
+    idBasisData: 'ad4792a6-b08f-4171-acbd-8c6a76bc4435',
+    judul: 'Multi-Trait Multi-Method Validation of Combined Psychological Assessment',
+    kutipan: 'Staggs, G. D., Larson, L. M., & Borgen, F. H. (2007). Convergence of personality and interests: Meta-analysis of the Multidimensional Personality Questionnaire and the Strong Interest Inventory. Journal of Career Assessment, 15(4), 423-445.',
+    assessmentType: 'cross',
+    domain: 'integration',
+    berkasAsal: 'cross-reference/integration-research.txt',
+    sumber: 'bab4-results/03-retrieval/retrieval-top-k.json',
+    sumberMetadata: 'ecosystem-futureguide/analysis-worker/knowledge/manifest.json',
+  },
+  {
+    id: 'D13',
+    idBasisData: '384a13a3-1cac-46ec-b8dc-5e6ca2aacfdd',
+    judul: 'PMAI Archetype Selection Algorithm: How to Identify the Lead Archetype from a Combined Profile',
+    kutipan: 'Pearson, C. S., & Marr, M. (2003). What story are you living? A workbook and guide to interpreting results from the Pearson-Marr Archetype Indicator. CAPT.',
+    assessmentType: 'cross',
+    domain: 'PMAI',
+    berkasAsal: 'cross-reference/pmai-archetypes.txt',
+    sumber: 'bab4-results/03-retrieval/retrieval-top-k.json',
+    sumberMetadata: 'ecosystem-futureguide/analysis-worker/knowledge/manifest.json',
+  },
+  {
+    id: 'D14',
+    idBasisData: '4d9b358c-68c0-49bc-abe3-34802f5424f8',
+    judul: 'Pearson-Marr Archetype Indicator (PMAI): A Twelve-Archetype Framework for Profile Identification',
+    kutipan: 'Pearson, C. S., & Marr, M. (2003). What story are you living? A workbook and guide to interpreting results from the Pearson-Marr Archetype Indicator instrument. Center for Applications of Psychological Type (CAPT).',
+    assessmentType: 'cross',
+    domain: 'PMAI',
+    berkasAsal: 'cross-reference/pmai-archetypes.txt',
+    sumber: 'bab4-results/03-retrieval/retrieval-top-k.json',
+    sumberMetadata: 'ecosystem-futureguide/analysis-worker/knowledge/manifest.json',
+  },
+  {
+    id: 'D15',
+    idBasisData: '27cceb62-30b2-451a-9b62-0c8e86c02c8a',
+    judul: 'RIASEC Congruence and Person-Environment Fit',
+    kutipan: 'Nye, C. D., Su, R., Rounds, J., & Drasgow, F. (2012). Vocational interests and performance: A quantitative summary of over 60 years of research. Perspectives on Psychological Science, 7(4), 384-403.',
+    assessmentType: 'riasec',
+    domain: 'Realistic',
+    berkasAsal: 'riasec/holland-theory.txt',
+    sumber: 'bab4-results/03-retrieval/retrieval-top-k.json',
+    sumberMetadata: 'ecosystem-futureguide/analysis-worker/knowledge/manifest.json',
+  },
+  {
+    id: 'D16',
+    idBasisData: 'ce44de40-dbfa-4a32-97ee-bec7922c01a2',
+    judul: 'RIASEC Interests and Academic Major Choice: Longitudinal Prediction',
+    kutipan: 'Allen, J., & Robbins, S. B. (2010). Effects of interest-major congruence, motivation, and academic performance on timely degree attainment. Journal of Counseling Psychology, 57(1), 23-35.',
+    assessmentType: 'riasec',
+    domain: 'RIASEC',
+    berkasAsal: 'riasec/validation-research.txt',
+    sumber: 'bab4-results/03-retrieval/retrieval-top-k.json',
+    sumberMetadata: 'ecosystem-futureguide/analysis-worker/knowledge/manifest.json',
+  },
+  {
+    id: 'D17',
+    idBasisData: '41e6a0ac-3148-4106-9b35-43a47240e7e7',
+    judul: 'RIASEC Interests in Multicultural and Cross-Cultural Contexts',
+    kutipan: 'Rounds, J., & Tracey, T. J. (1996). Cross-cultural structural equivalence of RIASEC models and measures. Journal of Counseling Psychology, 43(3), 310-329.',
+    assessmentType: 'riasec',
+    domain: 'RIASEC',
+    berkasAsal: 'riasec/validation-research.txt',
+    sumber: 'bab4-results/03-retrieval/retrieval-top-k.json',
+    sumberMetadata: 'ecosystem-futureguide/analysis-worker/knowledge/manifest.json',
+  },
+  {
+    id: 'D18',
+    idBasisData: '516cbb36-0a2f-4421-838e-6336ec6334ec',
+    judul: 'RIASEC Type Combinations and Specific Career Pathway Predictions',
+    kutipan: 'Nauta, M. M. (2010). The development, evolution, and status of Holland\'s theory of vocational personalities: Reflections and future directions for counseling psychology. Journal of Counseling Psychology, 57(1), 11-22.',
+    assessmentType: 'riasec',
+    domain: 'RIASEC',
+    berkasAsal: 'riasec/validation-research.txt',
+    sumber: 'bab4-results/03-retrieval/retrieval-top-k.json',
+    sumberMetadata: 'ecosystem-futureguide/analysis-worker/knowledge/manifest.json',
+  },
+  {
+    id: 'D19',
+    idBasisData: '0ee2aa71-0394-4c72-a2c1-69615860554e',
+    judul: 'RIASEC ↔ OCEAN Cross-Reference: Holland\'s Six Types Mapped to the Big Five',
+    kutipan: 'Larson, L. M., Rottinghaus, P. J., & Borgen, F. H. (2002). Meta-analyses of Big Six interests and Big Five personality factors. Journal of Vocational Behavior, 61(2), 217-239.',
+    assessmentType: 'cross',
+    domain: 'RIASEC-OCEAN',
+    berkasAsal: 'cross-reference/cross-analysis.txt',
+    sumber: 'bab4-results/03-retrieval/retrieval-top-k.json',
+    sumberMetadata: 'ecosystem-futureguide/analysis-worker/knowledge/manifest.json',
+  },
+  {
+    id: 'D20',
+    idBasisData: '30acc7b4-605d-4039-a0de-989ab3ca1f2f',
+    judul: 'Temperance Virtue Strengths — Forgiveness, Humility, Prudence, Self-Regulation',
+    kutipan: 'Peterson, C., & Seligman, M. E. P. (2004). Character strengths and virtues. Oxford University Press.',
+    assessmentType: 'via_is',
+    domain: 'Self-Regulation',
+    berkasAsal: 'via-is/character-strengths.txt',
+    sumber: 'bab4-results/03-retrieval/retrieval-top-k.json',
+    sumberMetadata: 'ecosystem-futureguide/analysis-worker/knowledge/manifest.json',
+  },
+  {
+    id: 'D21',
+    idBasisData: 'ad36f5ab-d9d1-4fe9-a28f-015327de94aa',
+    judul: 'VIA Strengths Differential Validity for Career Domains',
+    kutipan: 'Littman-Ovadia, H., Lavy, S., & Boiman-Meshita, M. (2017). When theory and research collide: Examining correlates of signature strengths use at work. Journal of Happiness Studies, 18, 527-548. https://doi.org/10.1007/s10902-016-9739-8',
+    assessmentType: 'via_is',
+    domain: 'VIA',
+    berkasAsal: 'via-is/youth-and-education.txt',
+    sumber: 'bab4-results/03-retrieval/retrieval-top-k.json',
+    sumberMetadata: 'ecosystem-futureguide/analysis-worker/knowledge/manifest.json',
+  },
+  {
+    id: 'D22',
+    idBasisData: '44f91aa2-efb8-4db2-8869-24a178dcce33',
+    judul: 'VIA Strengths and Team Composition: Complementary Strengths in Work Groups',
+    kutipan: 'Ruch, W., Gander, F., Platt, T., & Hofmann, J. (2018). Team roles: Their relationships to character strengths and job satisfaction. The Journal of Positive Psychology, 13(2), 190-199.',
+    assessmentType: 'via_is',
+    domain: 'VIA',
+    berkasAsal: 'via-is/wellbeing-research.txt',
+    sumber: 'bab4-results/03-retrieval/retrieval-top-k.json',
+    sumberMetadata: 'ecosystem-futureguide/analysis-worker/knowledge/manifest.json',
+  },
+  {
+    id: 'D23',
+    idBasisData: 'ef43e5bd-6cb6-48d2-af78-6ad04aae7eb0',
+    judul: 'Vocational Interest Fit Is Moderate and Unequally Distributed Across Education Groups',
+    kutipan: 'Hanna, A., Morris, M. L., Hoff, K. A., Nye, C. D., Jones, K. S., & Rounds, J. (2024). Can everyone get interesting jobs? Estimating interest fit and group differences across race/ethnicity, gender, and education. Applied Psychology. https://doi.org/10.1111/apps.12567',
+    assessmentType: 'riasec',
+    domain: 'RIASEC',
+    berkasAsal: 'riasec/recent-interest-evidence.txt',
+    sumber: 'bab4-results/03-retrieval/retrieval-top-k.json',
+    sumberMetadata: 'ecosystem-futureguide/analysis-worker/knowledge/manifest.json',
+  },
+  {
+    id: 'D24',
+    idBasisData: '5fc7d34c-b18e-4baa-b83e-b1c0b51a8f73',
+    judul: 'Wisdom Virtue Strengths — Creativity, Curiosity, Judgment, Love of Learning, Perspective',
+    kutipan: 'Peterson, C., & Seligman, M. E. P. (2004). Character strengths and virtues. Oxford University Press.',
+    assessmentType: 'via_is',
+    domain: 'Love of Learning',
+    berkasAsal: 'via-is/character-strengths.txt',
+    sumber: 'bab4-results/03-retrieval/retrieval-top-k.json',
+    sumberMetadata: 'ecosystem-futureguide/analysis-worker/knowledge/manifest.json',
+  },
+]
+
+/**
+ * Hasil retrieval jalur vektor per profil. Peringkat bersifat bersarang: daftar
+ * pada k kecil adalah awalan daftar pada k besar, sehingga cukup disimpan sekali.
+ * Nilai rubrik dibaca per kondisi menurut peringkat aslinya.
+ */
+export const retrievalVektor: ProfilRetrieval[] = [
+  {
+    profil: 'riset',
+    peringkat: [
+      { idDok: 'D14', similarity: 0.823767 },
+      { idDok: 'D24', similarity: 0.816777 },
+      { idDok: 'D13', similarity: 0.793336 },
+      { idDok: 'D09', similarity: 0.788272 },
+      { idDok: 'D18', similarity: 0.785980 },
+      { idDok: 'D15', similarity: 0.782663 },
+      { idDok: 'D19', similarity: 0.777126 },
+      { idDok: 'D06', similarity: 0.770914 },
+      { idDok: 'D08', similarity: 0.770369 },
+      { idDok: 'D12', similarity: 0.769943 },
+      { idDok: 'D07', similarity: 0.768372 },
+      { idDok: 'D21', similarity: 0.768194 },
+    ],
+    kondisi: [
+      {
+        k: 4,
+        status: 'ok',
+        tokenKonteks: 1377,
+        precision: 1.000000,
+        strongRasio: 0.750000,
+        strongAbsolut: 3,
+        relevanAbsolut: 4,
+        nilaiRubrik: [1, 2, 2, 2],
+      },
+      {
+        k: 6,
+        status: 'ok',
+        tokenKonteks: 1946,
+        precision: 1.000000,
+        strongRasio: 0.500000,
+        strongAbsolut: 3,
+        relevanAbsolut: 6,
+        nilaiRubrik: [1, 2, 2, 2, 1, 1],
+      },
+      {
+        k: 8,
+        status: 'ok',
+        tokenKonteks: 2612,
+        precision: 1.000000,
+        strongRasio: 0.625000,
+        strongAbsolut: 5,
+        relevanAbsolut: 8,
+        nilaiRubrik: [1, 2, 2, 2, 1, 1, 2, 2],
+      },
+      {
+        k: 10,
+        status: 'ok',
+        tokenKonteks: 3078,
+        precision: 1.000000,
+        strongRasio: 0.600000,
+        strongAbsolut: 6,
+        relevanAbsolut: 10,
+        nilaiRubrik: [1, 2, 2, 2, 1, 1, 2, 2, 1, 2],
+      },
+      {
+        k: 12,
+        status: 'ok',
+        tokenKonteks: 3708,
+        precision: 1.000000,
+        strongRasio: 0.500000,
+        strongAbsolut: 6,
+        relevanAbsolut: 12,
+        nilaiRubrik: [1, 2, 2, 2, 1, 1, 2, 2, 1, 2, 1, 1],
+      },
+    ],
+    sumber: 'bab4-results/03-retrieval/retrieval-top-k.json',
+    sumberRubrik: 'bab4-results/04-relevance-human/retrieval-relevance-unblinded.csv',
+  },
+  {
+    profil: 'sosial',
+    peringkat: [
+      { idDok: 'D14', similarity: 0.814790 },
+      { idDok: 'D13', similarity: 0.792105 },
+      { idDok: 'D18', similarity: 0.783353 },
+      { idDok: 'D19', similarity: 0.776415 },
+      { idDok: 'D15', similarity: 0.773915 },
+      { idDok: 'D09', similarity: 0.768132 },
+      { idDok: 'D08', similarity: 0.768058 },
+      { idDok: 'D02', similarity: 0.764761 },
+      { idDok: 'D22', similarity: 0.763158 },
+      { idDok: 'D01', similarity: 0.762218 },
+      { idDok: 'D11', similarity: 0.760320 },
+      { idDok: 'D17', similarity: 0.759986 },
+    ],
+    kondisi: [
+      {
+        k: 4,
+        status: 'ok',
+        tokenKonteks: 1458,
+        precision: 1.000000,
+        strongRasio: 0.500000,
+        strongAbsolut: 2,
+        relevanAbsolut: 4,
+        nilaiRubrik: [1, 2, 1, 2],
+      },
+      {
+        k: 6,
+        status: 'ok',
+        tokenKonteks: 2051,
+        precision: 1.000000,
+        strongRasio: 0.500000,
+        strongAbsolut: 3,
+        relevanAbsolut: 6,
+        nilaiRubrik: [1, 2, 1, 2, 1, 2],
+      },
+      {
+        k: 8,
+        status: 'ok',
+        tokenKonteks: 2540,
+        precision: 1.000000,
+        strongRasio: 0.500000,
+        strongAbsolut: 4,
+        relevanAbsolut: 8,
+        nilaiRubrik: [1, 2, 1, 2, 1, 2, 1, 2],
+      },
+      {
+        k: 10,
+        status: 'ok',
+        tokenKonteks: 3075,
+        precision: 1.000000,
+        strongRasio: 0.500000,
+        strongAbsolut: 5,
+        relevanAbsolut: 10,
+        nilaiRubrik: [1, 2, 1, 2, 1, 2, 1, 2, 2, 1],
+      },
+      {
+        k: 12,
+        status: 'ok',
+        tokenKonteks: 3575,
+        precision: 1.000000,
+        strongRasio: 0.500000,
+        strongAbsolut: 6,
+        relevanAbsolut: 12,
+        nilaiRubrik: [1, 2, 1, 2, 1, 2, 1, 2, 2, 1, 2, 1],
+      },
+    ],
+    sumber: 'bab4-results/03-retrieval/retrieval-top-k.json',
+    sumberRubrik: 'bab4-results/04-relevance-human/retrieval-relevance-unblinded.csv',
+  },
+  {
+    profil: 'kreatif',
+    peringkat: [
+      { idDok: 'D14', similarity: 0.820109 },
+      { idDok: 'D13', similarity: 0.790355 },
+      { idDok: 'D09', similarity: 0.785053 },
+      { idDok: 'D15', similarity: 0.784309 },
+      { idDok: 'D18', similarity: 0.782158 },
+      { idDok: 'D24', similarity: 0.777271 },
+      { idDok: 'D19', similarity: 0.772479 },
+      { idDok: 'D07', similarity: 0.771977 },
+      { idDok: 'D16', similarity: 0.769999 },
+      { idDok: 'D10', similarity: 0.769815 },
+      { idDok: 'D08', similarity: 0.767802 },
+      { idDok: 'D23', similarity: 0.766973 },
+    ],
+    kondisi: [
+      {
+        k: 4,
+        status: 'ok',
+        tokenKonteks: 1427,
+        precision: 1.000000,
+        strongRasio: 0.500000,
+        strongAbsolut: 2,
+        relevanAbsolut: 4,
+        nilaiRubrik: [1, 2, 2, 1],
+      },
+      {
+        k: 6,
+        status: 'ok',
+        tokenKonteks: 1946,
+        precision: 1.000000,
+        strongRasio: 0.500000,
+        strongAbsolut: 3,
+        relevanAbsolut: 6,
+        nilaiRubrik: [1, 2, 2, 1, 1, 2],
+      },
+      {
+        k: 8,
+        status: 'ok',
+        tokenKonteks: 2628,
+        precision: 1.000000,
+        strongRasio: 0.500000,
+        strongAbsolut: 4,
+        relevanAbsolut: 8,
+        nilaiRubrik: [1, 2, 2, 1, 1, 2, 2, 1],
+      },
+      {
+        k: 10,
+        status: 'ok',
+        tokenKonteks: 3129,
+        precision: 1.000000,
+        strongRasio: 0.400000,
+        strongAbsolut: 4,
+        relevanAbsolut: 10,
+        nilaiRubrik: [1, 2, 2, 1, 1, 2, 2, 1, 1, 1],
+      },
+      {
+        k: 12,
+        status: 'ok',
+        tokenKonteks: 3558,
+        precision: 1.000000,
+        strongRasio: 0.333333,
+        strongAbsolut: 4,
+        relevanAbsolut: 12,
+        nilaiRubrik: [1, 2, 2, 1, 1, 2, 2, 1, 1, 1, 1, 1],
+      },
+    ],
+    sumber: 'bab4-results/03-retrieval/retrieval-top-k.json',
+    sumberRubrik: 'bab4-results/04-relevance-human/retrieval-relevance-unblinded.csv',
+  },
+  {
+    profil: 'terstruktur',
+    peringkat: [
+      { idDok: 'D14', similarity: 0.820225 },
+      { idDok: 'D13', similarity: 0.792642 },
+      { idDok: 'D15', similarity: 0.784597 },
+      { idDok: 'D09', similarity: 0.779644 },
+      { idDok: 'D18', similarity: 0.779605 },
+      { idDok: 'D08', similarity: 0.774276 },
+      { idDok: 'D19', similarity: 0.771973 },
+      { idDok: 'D05', similarity: 0.771478 },
+      { idDok: 'D20', similarity: 0.770541 },
+      { idDok: 'D12', similarity: 0.770492 },
+      { idDok: 'D04', similarity: 0.770052 },
+      { idDok: 'D17', similarity: 0.767370 },
+    ],
+    kondisi: [
+      {
+        k: 4,
+        status: 'ok',
+        tokenKonteks: 1427,
+        precision: 1.000000,
+        strongRasio: 0.500000,
+        strongAbsolut: 2,
+        relevanAbsolut: 4,
+        nilaiRubrik: [1, 2, 1, 2],
+      },
+      {
+        k: 6,
+        status: 'ok',
+        tokenKonteks: 1873,
+        precision: 1.000000,
+        strongRasio: 0.333333,
+        strongAbsolut: 2,
+        relevanAbsolut: 6,
+        nilaiRubrik: [1, 2, 1, 2, 1, 1],
+      },
+      {
+        k: 8,
+        status: 'ok',
+        tokenKonteks: 2515,
+        precision: 1.000000,
+        strongRasio: 0.375000,
+        strongAbsolut: 3,
+        relevanAbsolut: 8,
+        nilaiRubrik: [1, 2, 1, 2, 1, 1, 2, 1],
+      },
+      {
+        k: 10,
+        status: 'ok',
+        tokenKonteks: 3067,
+        precision: 1.000000,
+        strongRasio: 0.500000,
+        strongAbsolut: 5,
+        relevanAbsolut: 10,
+        nilaiRubrik: [1, 2, 1, 2, 1, 1, 2, 1, 2, 2],
+      },
+      {
+        k: 12,
+        status: 'ok',
+        tokenKonteks: 3631,
+        precision: 1.000000,
+        strongRasio: 0.416667,
+        strongAbsolut: 5,
+        relevanAbsolut: 12,
+        nilaiRubrik: [1, 2, 1, 2, 1, 1, 2, 1, 2, 2, 1, 1],
+      },
+    ],
+    sumber: 'bab4-results/03-retrieval/retrieval-top-k.json',
+    sumberRubrik: 'bab4-results/04-relevance-human/retrieval-relevance-unblinded.csv',
+  },
+  {
+    profil: 'kepemimpinan',
+    peringkat: [
+      { idDok: 'D14', similarity: 0.817616 },
+      { idDok: 'D13', similarity: 0.797241 },
+      { idDok: 'D05', similarity: 0.795801 },
+      { idDok: 'D03', similarity: 0.788132 },
+      { idDok: 'D15', similarity: 0.781207 },
+      { idDok: 'D18', similarity: 0.779666 },
+      { idDok: 'D09', similarity: 0.773752 },
+      { idDok: 'D19', similarity: 0.773260 },
+      { idDok: 'D08', similarity: 0.773079 },
+      { idDok: 'D17', similarity: 0.772066 },
+      { idDok: 'D22', similarity: 0.765948 },
+      { idDok: 'D23', similarity: 0.765262 },
+    ],
+    kondisi: [
+      {
+        k: 4,
+        status: 'ok',
+        tokenKonteks: 1388,
+        precision: 1.000000,
+        strongRasio: 0.500000,
+        strongAbsolut: 2,
+        relevanAbsolut: 4,
+        nilaiRubrik: [1, 2, 2, 1],
+      },
+      {
+        k: 6,
+        status: 'ok',
+        tokenKonteks: 1957,
+        precision: 1.000000,
+        strongRasio: 0.333333,
+        strongAbsolut: 2,
+        relevanAbsolut: 6,
+        nilaiRubrik: [1, 2, 2, 1, 1, 1],
+      },
+      {
+        k: 8,
+        status: 'ok',
+        tokenKonteks: 2605,
+        precision: 1.000000,
+        strongRasio: 0.500000,
+        strongAbsolut: 4,
+        relevanAbsolut: 8,
+        nilaiRubrik: [1, 2, 2, 1, 1, 1, 2, 2],
+      },
+      {
+        k: 10,
+        status: 'ok',
+        tokenKonteks: 3043,
+        precision: 1.000000,
+        strongRasio: 0.400000,
+        strongAbsolut: 4,
+        relevanAbsolut: 10,
+        nilaiRubrik: [1, 2, 2, 1, 1, 1, 2, 2, 1, 1],
+      },
+      {
+        k: 12,
+        status: 'ok',
+        tokenKonteks: 3536,
+        precision: 1.000000,
+        strongRasio: 0.416667,
+        strongAbsolut: 5,
+        relevanAbsolut: 12,
+        nilaiRubrik: [1, 2, 2, 1, 1, 1, 2, 2, 1, 1, 2, 1],
+      },
+    ],
+    sumber: 'bab4-results/03-retrieval/retrieval-top-k.json',
+    sumberRubrik: 'bab4-results/04-relevance-human/retrieval-relevance-unblinded.csv',
+  },
+]
+
+/** Mencari satu dokumen pada registri; identitas yang tidak dikenal harus gagal keras. */
+export function dokumenDenganId(id: string): DokumenRetrieval {
+  const dokumen = dokumenRetrieval.find((item) => item.id === id)
+  if (!dokumen) throw new Error(`Dokumen retrieval tidak dikenal: ${id}`)
+  return dokumen
+}
+
+/** Komposisi jenis asesmen pada dokumen yang benar-benar terambil; dihitung dari registri. */
+export const komposisiJenisDokumen: Array<{ jenis: string; jumlah: number }> = (
+  ['riasec', 'ocean', 'via_is', 'cross'] as const
+).map((jenis) => ({
+  jenis,
+  jumlah: dokumenRetrieval.filter((dokumen) => dokumen.assessmentType === jenis).length,
+}))
+
+export const catatanKomposisiDokumen: Butir = {
+  id: 'komposisi-jenis-dokumen',
+  judul: 'Tidak ada dokumen berjenis ocean yang pernah terambil',
+  isi: 'Dari seluruh dokumen unik yang terambil pada jalur vektor lintas lima profil dan lima nilai k, tidak satu pun berjenis ocean. Kueri OCEAN tetap dijalankan dan tetap mengembalikan hasil, tetapi hasil teratasnya berjenis cross.',
+  catatan:
+    'Ini dibaca sebagai cakupan korpus, bukan sebagai kegagalan kueri: seluruh 50 kondisi berstatus ok tanpa no_result.',
+  sumber: 'bab4-results/03-retrieval/retrieval-top-k.json + bab4.tex:116',
+}
+
+/**
+ * Deviasi yang tidak didamaikan: harness kalibrasi k tidak memakai batas tiga
+ * dokumen per kueri seperti runtime, melainkan mengambil sampai 500 lalu
+ * menggabung, dedup, mengurutkan, dan memotong pada k.
+ */
+export const deviasiHarnessRetrieval: Butir = {
+  id: 'deviasi-batas-per-kueri',
+  judul: 'Batas per kueri pada harness berbeda dengan runtime',
+  isi: 'Runtime memakai batas tiga dokumen per kueri sebelum penggabungan. Harness kalibrasi k memakai batas 500 per kueri, lalu menggabung kelima hasil, dedup, mengurutkan menurut kesamaan menurun, dan memotong pada k. Daftar dokumen yang ditampilkan adegan ini berasal dari harness itu, bukan dari jalur runtime.',
+  catatan:
+    'Akibatnya daftar per k bersarang: daftar pada k kecil adalah awalan daftar pada k besar. Pada runtime dengan batas tiga per kueri, kandidat sebelum dedup paling banyak 15.',
+  sumber:
+    'ecosystem-futureguide/analysis-worker/internal/rag/retriever_eval_test.go:28 + ecosystem-futureguide/analysis-worker/internal/consumer/job_consumer.go:691',
+}
+
+/** Batas pembacaan penilaian rubrik yang wajib tampil bersama nilai per dokumen. */
+export const batasRubrikRetrieval: Butir = {
+  id: 'batas-rubrik-retrieval',
+  judul: 'Rubrik dinilai per kondisi, oleh satu penilai',
+  isi: 'Penilaian relevansi dikerjakan buta per kondisi, dengan jalur, peringkat, dan nilai kesamaan disembunyikan. Karena itu dokumen yang sama dapat menerima nilai berbeda pada nilai k yang berbeda, dan nilai itu tidak dapat dibaca sebagai sifat tetap dokumen.',
+  catatan:
+    'Penilaian dikerjakan satu penilai berbantuan atas delegasi eksplisit; reliabilitas antarpenilai tidak diukur.',
+  sumber: 'bab4.tex:144 + bab4-results/04-relevance-human/summary-metrics.md',
+}
+
+/** Label visual S08; ditempatkan di lapisan data agar viz tidak menulis istilah sendiri. */
+export const labelPencarian: Bersumber & {
+  judulVisual: string
+  traversal: string
+  titikMasuk: string
+  tetangga: string
+  ilustratif: string
+  jarak: string
+  kesamaan: string
+  ambangBuang: string
+  saringan: string
+  kandidat: string
+  potong: string
+  daftarReferensi: string
+  peringkat: string
+  nilaiRubrik: string
+  rubrik: Record<string, string>
+  metrik: string
+  rerata: string
+  precision: string
+  strongRasio: string
+  strongAbsolut: string
+  token: string
+  deltaDariSebelumnya: string
+  kFinal: string
+  jalurCadangan: string
+  profil: string
+  jenisDokumen: string
+} = {
+  judulVisual: 'Pencarian HNSW sampai potong k',
+  traversal: 'Traversal berlapis',
+  titikMasuk: 'titik masuk',
+  tetangga: 'tetangga terkunci',
+  ilustratif: 'tata letak ilustratif',
+  jarak: 'jarak kosinus',
+  kesamaan: 'kesamaan',
+  ambangBuang: 'dibuang di bawah ambang',
+  saringan: 'Saringan berurutan',
+  kandidat: 'kandidat',
+  potong: 'potong pada k',
+  daftarReferensi: 'Referensi terpilih pada k ini',
+  peringkat: 'peringkat',
+  nilaiRubrik: 'rubrik',
+  rubrik: {
+    '0': 'tidak relevan',
+    '1': 'relevan longgar',
+    '2': 'dukungan kuat',
+  },
+  metrik: 'Metrik pada k ini',
+  rerata: 'rerata 5 profil',
+  precision: 'Precision@k',
+  strongRasio: 'Strong-Relevance@k',
+  strongAbsolut: 'referensi berdukungan kuat',
+  token: 'token konteks',
+  deltaDariSebelumnya: 'selisih dari k sebelumnya',
+  kFinal: 'k final Bab 4',
+  jalurCadangan: 'jalur cadangan · rubrik yang sama, skala skor mentah berbeda',
+  profil: 'Profil uji sintetis',
+  jenisDokumen: 'Jenis asesmen dokumen terambil',
+  sumber: 'bab3.tex:206 + bab4.tex:116–140 + bab4-results/04-relevance-human/summary-metrics.md',
+}
 
 export const parameterK: Bersumber & {
   nama: string
@@ -867,6 +1678,73 @@ export const angkaRag: Angka[] = [
     status: 'terukur',
     catatan: '5 profil × 2 jalur × 5 nilai k; seluruhnya berstatus ok tanpa no_result.',
     sumber: 'bab4.tex:116',
+  },
+  {
+    id: 'rag.batas-per-kueri-harness',
+    adegan: 'S08',
+    label: 'Batas dokumen per kueri pada harness kalibrasi k',
+    nilai: 500,
+    tampil: '500',
+    satuan: 'dokumen',
+    status: 'terukur',
+    catatan:
+      'Harness memakai batas tak terkapkan 500 per kueri, berbeda dari runtime yang memakai 3. Deviasi dicatat, bukan didamaikan.',
+    sumber: 'ecosystem-futureguide/analysis-worker/internal/rag/retriever_eval_test.go:28',
+  },
+  {
+    id: 'rag.dokumen-unik-vektor',
+    adegan: 'S08',
+    label: 'Dokumen unik terambil pada jalur vektor',
+    nilai: dokumenRetrieval.length,
+    tampil: String(dokumenRetrieval.length),
+    satuan: 'dokumen',
+    status: 'terukur',
+    catatan: 'Gabungan lima profil × lima nilai k pada jalur vektor; dihitung dari artefak, bukan diketik.',
+    sumber: 'bab4-results/03-retrieval/retrieval-top-k.json',
+  },
+  {
+    id: 'rag.precision-k-final',
+    adegan: 'S08',
+    label: 'Precision@k pada k final',
+    nilai: 1,
+    tampil: '1,0000',
+    status: 'terukur',
+    catatan: 'Jalur vektor, rerata lima profil; tiap profil 8 dari 8. Datar sejak k=4 sehingga tidak dapat menjadi pembeda.',
+    sumber: 'bab4-results/BAB4_ANGKA_FINAL.md:33',
+  },
+  {
+    id: 'rag.strong-k-final',
+    adegan: 'S08',
+    label: 'Strong-Relevance@k pada k final',
+    nilai: 0.5,
+    tampil: '0,5000',
+    status: 'terukur',
+    pembilang: 4,
+    penyebut: 8,
+    catatan: 'Jalur vektor, rerata lima profil; setara 4,0 dari 8 referensi per profil.',
+    sumber: 'bab4-results/BAB4_ANGKA_FINAL.md:34',
+  },
+  {
+    id: 'rag.delta-kuat-6-8',
+    adegan: 'S08',
+    label: 'Tambahan referensi berdukungan kuat dari k=6 ke k=8',
+    nilai: 1.4,
+    tampil: '+1,4',
+    satuan: 'referensi',
+    status: 'terukur',
+    catatan: 'Lonjakan terbesar pada seluruh rentang yang diuji.',
+    sumber: 'bab4.tex:131',
+  },
+  {
+    id: 'rag.delta-kuat-8-10',
+    adegan: 'S08',
+    label: 'Tambahan referensi berdukungan kuat dari k=8 ke k=10',
+    nilai: 0.8,
+    tampil: '+0,8',
+    satuan: 'referensi',
+    status: 'terukur',
+    catatan: 'Disertai penurunan rasio Strong-Relevance 0,02 dan tambahan sekitar 500 token konteks.',
+    sumber: 'bab4.tex:131',
   },
   {
     id: 'rag.token-konteks-min',

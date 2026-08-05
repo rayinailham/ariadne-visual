@@ -251,6 +251,36 @@ export const alasanLimaKueri: Butir[] = [
   },
 ]
 
+/** Label visual S06; ditempatkan di lapisan data agar viz tidak menulis istilah sendiri. */
+export const labelSkorKueri: Bersumber & {
+  judulVisual: string
+  profil: string
+  namaKelompok: { riasec: string; ocean: string; via_is: string }
+  skorMasuk: string
+  domainLolos: string
+  ambangVia: string
+  komposisiLimaProfil: string
+  dominasi: string
+  seimbang: string
+  teksKueri: string
+  peringatanAmbang: string
+  deviasiRuntime: string
+} = {
+  judulVisual: 'Translasi skor menjadi kueri',
+  profil: 'Profil uji sintetis',
+  namaKelompok: { riasec: 'RIASEC', ocean: 'OCEAN', via_is: 'VIA-IS' },
+  skorMasuk: 'skor domain masuk',
+  domainLolos: 'domain lolos seleksi',
+  ambangVia: 'Ambang seleksi VIA-IS',
+  komposisiLimaProfil: 'Agregat domain lolos · 5 profil',
+  dominasi: 'VIA-IS mendominasi kueri lintas-instrumen',
+  seimbang: 'VIA-IS tidak mendominasi kueri lintas-instrumen',
+  teksKueri: 'Teks kueri yang dikirim ke penyemat',
+  peringatanAmbang: 'Parameter rekayasa seleksi kueri — bukan cut-off psikometrik',
+  deviasiRuntime: 'Naskah dikunci pada 50/50/75; kode runtime dan harness ablasi memakai 50/50/70.',
+  sumber: 'bab3.tex:198–202 + bab4.tex:23',
+}
+
 // ---------------------------------------------------------------------------
 // S07 — Embedding dan ruang vektor
 // ---------------------------------------------------------------------------

@@ -327,6 +327,49 @@ export const ruangVektor: Butir[] = [
   },
 ]
 
+export const contohKesamaanVektor: Bersumber & {
+  profil: string
+  judulDokumen: string
+  similarity: number
+} = {
+  profil: 'Riset',
+  judulDokumen: 'Pearson-Marr Archetype Indicator (PMAI): A Twelve-Archetype Framework for Profile Identification',
+  similarity: 0.823767,
+  sumber: 'bab4-results/03-retrieval/retrieval-top-k.csv:2',
+}
+
+/** Label visual S07. Posisi titik selain pasangan terukur bersifat ilustratif. */
+export const labelRuangVektor: Bersumber & {
+  judulVisual: string
+  proyeksi: string
+  dokumen: string
+  kueri: string
+  bolaSatuan: string
+  norma: string
+  sudut: string
+  kosinus: string
+  dotProduct: string
+  pasanganTerukur: string
+  batasProyeksi: string
+  modeBergerak: string
+  modeStatis: string
+} = {
+  judulVisual: 'Embedding dalam satu ruang vektor',
+  proyeksi: 'Proyeksi 3D dari 768-D untuk keperluan tampilan',
+  dokumen: 'unit korpus · RETRIEVAL_DOCUMENT',
+  kueri: 'kueri bertema · RETRIEVAL_QUERY',
+  bolaSatuan: 'permukaan bola satuan',
+  norma: 'norma L2',
+  sudut: 'sudut θ',
+  kosinus: 'cos(θ)',
+  dotProduct: 'dot product setelah normalisasi',
+  pasanganTerukur: 'pasangan kueri–dokumen terukur',
+  batasProyeksi: 'Posisi awan merupakan tata letak ilustratif. Hanya dimensi, norma sampel, dan pasangan kesamaan yang ditampilkan sebagai hasil terukur; nilai 768-D korpus tidak dipublikasikan.',
+  modeBergerak: 'mode bergerak',
+  modeStatis: 'mode statis · prefers-reduced-motion',
+  sumber: 'bab3.tex:204 + bab4.tex:50 + bab4-results/03-retrieval/retrieval-top-k.csv:2',
+}
+
 // ---------------------------------------------------------------------------
 // S08 — Pencarian HNSW dan top-k
 // ---------------------------------------------------------------------------

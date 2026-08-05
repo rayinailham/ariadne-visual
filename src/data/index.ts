@@ -43,3 +43,15 @@ export const semuaAngka: Angka[] = kumpulkanAngka(
 
 /** Angka yang belum punya bukti angka pasti; ditampilkan apa adanya. */
 export const angkaTanpaNilai: Angka[] = semuaAngka.filter((angka) => angka.nilai === null)
+
+/**
+ * Mengambil satu angka menurut slug-nya.
+ *
+ * Sengaja melempar galat bila slug tidak dikenal: adegan yang salah menulis
+ * slug harus gagal saat dibuka, bukan menampilkan angka kosong tanpa sebab.
+ */
+export function angkaDenganId(id: string): Angka {
+  const angka = semuaAngka.find((a) => a.id === id)
+  if (!angka) throw new Error(`Angka tidak dikenal pada lapisan data: ${id}`)
+  return angka
+}

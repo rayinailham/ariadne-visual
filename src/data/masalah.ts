@@ -107,7 +107,7 @@ export const konteksMasalah: Butir[] = [
   {
     id: 'beban-bimbingan',
     judul: 'Bimbingan karier menuntut lebih dari waktu',
-    isi: 'Bimbingan karier menuntut waktu, kemampuan menafsirkan hasil tes, dan instrumen psikometrik yang sesuai; layanan psikologi profesional belum tentu terjangkau setiap keluarga.',
+    isi: 'Bimbingan karier menuntut waktu, kemampuan menafsirkan hasil pengukuran, serta instrumen psikometrik yang sesuai; layanan psikologi profesional belum tentu terjangkau setiap keluarga.',
     sumber: 'bab1.tex:7',
   },
   {

@@ -320,6 +320,17 @@ export const profilSintetis: ProfilSintetis[] = [
   },
 ]
 
+/**
+ * Batas pembacaan profil sintetis. Wajib tayang bersama skornya, karena skor
+ * yang ditampilkan bukan skor siswa mana pun.
+ */
+export const catatanProfilSintetis: Butir = {
+  id: 'profil-sintetis',
+  judul: 'Profil uji sintetis',
+  isi: 'Lima profil uji sintetis dipakai pada eksperimen retrieval dan ablasi. Nama profil menandai pola skor yang ditonjolkan, bukan tipe kepribadian yang diklaim ada pada siswa tertentu.',
+  sumber: 'bab3.tex:104',
+}
+
 /** Profil dasar uji sensitivitas: seluruh 35 skor bernilai 50. */
 export const profilDasar: Bersumber & { nilaiSeluruhDomain: number } = {
   nilaiSeluruhDomain: 50,

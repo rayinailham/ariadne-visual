@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import ProgressRail from '@/components/ProgressRail.vue'
-import SceneUjiMekanik from '@/scenes/SceneUjiMekanik.vue'
+import SceneMasalah from '@/scenes/SceneMasalah.vue'
+import SceneInstrumen from '@/scenes/SceneInstrumen.vue'
 import { useTema } from '@/composables/useTema'
 import type { RingkasanAdegan } from '@/composables/adegan'
 import { angkaTanpaNilai, semuaAngka } from '@/data'
@@ -15,7 +16,10 @@ const jumlahAngkaTanpaNilai = angkaTanpaNilai.length
  * Daftar adegan yang sudah tayang. Bertambah tiap fase sesuai peta adegan
  * di rencana/08-PLAN-WEB-VISUAL.md.
  */
-const adegan: RingkasanAdegan[] = [{ id: 'S00', kode: 'S00', judul: 'Uji mekanik' }]
+const adegan: RingkasanAdegan[] = [
+  { id: 'S01', kode: 'S01', judul: 'Masalah' },
+  { id: 'S02', kode: 'S02', judul: 'Instrumen' },
+]
 </script>
 
 <template>
@@ -60,19 +64,20 @@ const adegan: RingkasanAdegan[] = [{ id: 'S00', kode: 'S00', judul: 'Uji mekanik
       </p>
     </section>
 
-    <SceneUjiMekanik />
+    <SceneMasalah />
+    <SceneInstrumen />
   </main>
 
   <footer
     class="mx-auto max-w-[92rem] border-t border-garis px-5 py-12 text-mikro text-teks-samar md:px-8 lg:px-12"
   >
     <p>
-      Fase F1: lapisan data terpasang sebagai sumber fakta tunggal.
-      <span class="font-mono">{{ jumlahAngka }}</span> angka terdaftar, di antaranya
-      <span class="font-mono">{{ jumlahAngkaTanpaNilai }}</span> tanpa nilai numerik dan
-      ditampilkan apa adanya. Peta bukti tiap angka ada di
-      <span class="font-mono">scripts/verifikasi-angka.md</span>. Adegan isi menyusul
-      sesuai peta adegan.
+      Seluruh angka pada halaman ini dibaca dari satu lapisan data yang membawa
+      berkas dan baris sumbernya. <span class="font-mono">{{ jumlahAngka }}</span> angka
+      terdaftar, di antaranya <span class="font-mono">{{ jumlahAngkaTanpaNilai }}</span>
+      tanpa nilai numerik dan ditampilkan apa adanya. Peta bukti tiap angka ada di
+      <span class="font-mono">scripts/verifikasi-angka.md</span>. Adegan berikutnya
+      menyusul sesuai peta adegan.
     </p>
   </footer>
 </template>

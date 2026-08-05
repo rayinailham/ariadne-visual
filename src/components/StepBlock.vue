@@ -7,6 +7,8 @@ const props = defineProps<{
   indeks: number
   /** Judul singkat langkah. Muncul sebagai penanda, bukan hiasan. */
   judul: string
+  /** Berkas + baris asal pernyataan langkah ini; tayang di kaki blok. */
+  sumber?: string
 }>()
 
 const { langkahAktif, kode } = pakaiAdegan()
@@ -40,5 +42,7 @@ const nomor = computed(() => String(props.indeks + 1).padStart(2, '0'))
     <div class="mt-4 flex flex-col gap-4 text-badan text-teks-redup">
       <slot />
     </div>
+
+    <p v-if="sumber" class="label-teknis mt-4">Sumber: {{ sumber }}</p>
   </article>
 </template>

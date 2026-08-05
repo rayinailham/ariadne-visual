@@ -3,8 +3,13 @@ import ProgressRail from '@/components/ProgressRail.vue'
 import SceneUjiMekanik from '@/scenes/SceneUjiMekanik.vue'
 import { useTema } from '@/composables/useTema'
 import type { RingkasanAdegan } from '@/composables/adegan'
+import { angkaTanpaNilai, semuaAngka } from '@/data'
 
 const { gantiTema } = useTema()
+
+/** Ringkasan lapisan data; buktinya ada di `scripts/verifikasi-angka.md`. */
+const jumlahAngka = semuaAngka.length
+const jumlahAngkaTanpaNilai = angkaTanpaNilai.length
 
 /**
  * Daftar adegan yang sudah tayang. Bertambah tiap fase sesuai peta adegan
@@ -62,7 +67,12 @@ const adegan: RingkasanAdegan[] = [{ id: 'S00', kode: 'S00', judul: 'Uji mekanik
     class="mx-auto max-w-[92rem] border-t border-garis px-5 py-12 text-mikro text-teks-samar md:px-8 lg:px-12"
   >
     <p>
-      Fase F0: fondasi dan sistem desain. Adegan isi menyusul sesuai peta adegan.
+      Fase F1: lapisan data terpasang sebagai sumber fakta tunggal.
+      <span class="font-mono">{{ jumlahAngka }}</span> angka terdaftar, di antaranya
+      <span class="font-mono">{{ jumlahAngkaTanpaNilai }}</span> tanpa nilai numerik dan
+      ditampilkan apa adanya. Peta bukti tiap angka ada di
+      <span class="font-mono">scripts/verifikasi-angka.md</span>. Adegan isi menyusul
+      sesuai peta adegan.
     </p>
   </footer>
 </template>
